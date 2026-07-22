@@ -3,10 +3,9 @@ const api = require("../../services/api");
 const defaultSettings = {
   questionCount: 10,
   modes: {
-    beginner: [65, 25, 10, 0, 0], proficient: [15, 25, 30, 20, 10],
-    challenge: [0, 10, 20, 30, 40],
+    beginner: [90, 10, 0], proficient: [40, 40, 20],
+    challenge: [10, 40, 50],
   },
-  fontPresets: [],
 };
 
 function rows(settings) {
@@ -31,8 +30,8 @@ function groupSubmissions(submissions) {
 
 Page({
   data: {
-    loading: true, savingStrategy: false, savingFonts: false, settings: defaultSettings,
-    strategyRows: rows(defaultSettings), fontText: "", submissionGroups: [],
+    loading: true, savingStrategy: false, savingOptions: false, settings: defaultSettings,
+    strategyRows: rows(defaultSettings), submissionGroups: [],
     submissionItems: [], submissionPage: 1, submissionsTotal: 0, loadingMore: false,
   },
 
@@ -45,13 +44,13 @@ Page({
     try {
       const data = await Promise.all([
         api.getAdminSettings(this.adminToken),
-        api.listSubmissions(this.adminToken, { page: 1, pageSize: 50 }),
+        api.listSubmissions(this.adminToken, { page: 1, pageSize: 50 }), api.getOptionGroups(this.adminToken),
       ]);
       const settings = data[0];
       this.setData({
-        settings, strategyRows: rows(settings), fontText: settings.fontPresets.join("\n"),
+        settings, strategyRows: rows(settings),
         submissionItems: data[1].items, submissionGroups: groupSubmissions(data[1].items),
-        submissionPage: data[1].page, submissionsTotal: data[1].total,
+        submissionPage: data[1].page, submissionsTotal: data[1].total, optionGroups: data[2],
       });
     } catch (error) { wx.showToast({ title: error.message || "加载失败", icon: "none" }); }
     finally { this.setData({ loading: false }); }
@@ -70,8 +69,6 @@ Page({
     this.setData({ settings, strategyRows: rows(settings) });
   },
 
-  updateFonts(event) { this.setData({ fontText: event.detail.value }); },
-
   async saveStrategy() {
     this.setData({ savingStrategy: true });
     try {
@@ -81,15 +78,25 @@ Page({
     finally { this.setData({ savingStrategy: false }); }
   },
 
-  async saveFonts() {
-    const fontPresets = this.data.fontText.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
-    this.setData({ savingFonts: true });
-    try {
-      await api.saveFontPresets(this.adminToken, fontPresets);
-      this.setData({ "settings.fontPresets": fontPresets });
-      wx.showToast({ title: "字体快捷项已保存", icon: "success" });
-    } catch (error) { wx.showToast({ title: error.message || "字体快捷项保存失败", icon: "none" }); }
-    finally { this.setData({ savingFonts: false }); }
+  updateOptionName(event) {
+    const { group, option } = event.currentTarget.dataset;
+    this.setData({ [`optionGroups[${group}].options[${option}].name`]: event.detail.value });
+  },
+  addOption(event) {
+    const index = event.currentTarget.dataset.group;
+    const optionGroups = this.data.optionGroups;
+    optionGroups[index].options.push({ id: "", name: "", minimumDifficulty: 1 });
+    this.setData({ optionGroups });
+  },
+  updateOptionDifficulty(event) {
+    const { group, option } = event.currentTarget.dataset;
+    this.setData({ [`optionGroups[${group}].options[${option}].minimumDifficulty`]: Number(event.detail.value) + 1 });
+  },
+  async saveOptions() {
+    this.setData({ savingOptions: true });
+    try { await api.saveOptionGroups(this.adminToken, this.data.optionGroups); wx.showToast({ title: "字体分区已保存", icon: "success" }); }
+    catch (error) { wx.showToast({ title: error.message || "字体分区保存失败", icon: "none" }); }
+    finally { this.setData({ savingOptions: false }); }
   },
 
   async loadMoreSubmissions() {

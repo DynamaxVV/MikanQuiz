@@ -50,9 +50,9 @@ python -m pytest web/backend/tests -q
 {
   "question_count": 10,
   "modes": {
-    "beginner": [65, 25, 10, 0, 0],
-    "proficient": [15, 25, 30, 20, 10],
-    "challenge": [0, 10, 20, 30, 40]
+    "beginner": [90, 10, 0],
+    "proficient": [40, 40, 20],
+    "challenge": [10, 40, 50]
   },
   "font_presets": []
 }

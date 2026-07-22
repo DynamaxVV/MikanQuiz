@@ -15,22 +15,18 @@ def make_question(question_id: int, difficulty: int) -> Question:
         id=question_id,
         text=str(question_id),
         difficulty=difficulty,
-        option_a="A",
-        option_b="B",
-        option_c="C",
-        option_d="D",
-        answer="A",
+        correct_option_id=1,
         explanation="解析",
     )
 
 
 def test_weighted_selection_is_distinct_and_uses_a_smaller_available_pool() -> None:
     """Draws never repeat rows and uses all eligible questions when fewer exist."""
-    questions = [make_question(index, index) for index in range(1, 6)]
-    selected = select_questions(questions, 5, [1, 1, 1, 1, 1], random.Random(7))
-    assert len({question.id for question in selected}) == 5
-    smaller = select_questions(questions, 2, [0, 0, 100, 0, 0], random.Random(7))
+    questions = [make_question(index, index) for index in range(1, 4)]
+    selected = select_questions(questions, 5, [1, 1, 1], random.Random(7))
+    assert len({question.id for question in selected}) == 3
+    smaller = select_questions(questions, 2, [0, 0, 100], random.Random(7))
     assert [question.id for question in smaller] == [3]
     with pytest.raises(ApiError) as error:
-        select_questions(questions, 2, [0, 0, 0, 0, 0], random.Random(7))
+        select_questions(questions, 2, [0, 0, 0], random.Random(7))
     assert error.value.code == "QUIZ_NOT_ENOUGH_QUESTIONS"

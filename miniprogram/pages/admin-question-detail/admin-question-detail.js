@@ -5,8 +5,9 @@ function formatQuestion(item) {
   for (let index = 0; index < (item.difficulty || 1); index += 1) stars.push(index);
   return {
     _id: item.id, text: item.text, imageUrl: item.imageUrl || "", difficulty: item.difficulty || 1,
-    stars, answer: item.answer,
-    options: item.options.map((text, index) => ({ key: String.fromCharCode(65 + index), text })),
+    stars, answer: item.correctOptionId,
+    correctOption: item.correctOption, correctGroup: item.correctGroup,
+    configurationError: item.configurationError || "",
     explanation: item.explanation || "",
   };
 }

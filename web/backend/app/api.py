@@ -23,7 +23,8 @@ from app.schemas import (
     AttemptSubmit,
     FontReferenceResponse,
     FontReferenceWrite,
-    FontPresetsUpdate,
+    OptionCatalogUpdate,
+    OptionGroupResponse,
     HealthResponse,
     ImageUploadResponse,
     QuestionPage,
@@ -41,6 +42,7 @@ from app.services import questions as question_service
 from app.services import quiz as quiz_service
 from app.services.serializers import (
     admin_question,
+    catalogue,
     settings_response,
     submission_list_item,
 )
@@ -240,7 +242,7 @@ def list_admin_questions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     query: str | None = Query(default=None, max_length=500),
-    difficulty: list[Annotated[int, Query(ge=1, le=5)]] | None = Query(default=None),
+    difficulty: list[Annotated[int, Query(ge=1, le=3)]] | None = Query(default=None),
     _: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> QuestionPage:
@@ -249,7 +251,7 @@ def list_admin_questions(
         session, page, page_size, query, difficulty
     )
     return QuestionPage(
-        items=[admin_question(item) for item in items],
+        items=[admin_question(session, item) for item in items],
         page=page,
         page_size=page_size,
         total=total,
@@ -263,7 +265,7 @@ def create_admin_question(
     session: Session = Depends(get_session),
 ) -> QuestionResponse:
     """Create one validated question from the PC editor form."""
-    return admin_question(question_service.create_question(session, data))
+    return admin_question(session, question_service.create_question(session, data))
 
 
 @router.get("/admin/questions/{question_id}", response_model=QuestionResponse)
@@ -273,7 +275,7 @@ def get_admin_question(
     session: Session = Depends(get_session),
 ) -> QuestionResponse:
     """Return a complete question for editing or read-only preview."""
-    return admin_question(question_service.get_question(session, question_id))
+    return admin_question(session, question_service.get_question(session, question_id))
 
 
 @router.post("/admin/images", response_model=ImageUploadResponse, status_code=201)
@@ -332,7 +334,7 @@ def patch_admin_question(
 ) -> QuestionResponse:
     """Apply a validated partial edit while preserving fixed option invariants."""
     question = question_service.get_question(session, question_id)
-    return admin_question(question_service.update_question(session, question, data))
+    return admin_question(session, question_service.update_question(session, question, data))
 
 
 @router.delete("/admin/questions/{question_id}", status_code=204)
@@ -354,6 +356,25 @@ def get_admin_settings(
     return settings_response(question_service.get_settings(session))
 
 
+@router.get("/admin/option-groups", response_model=list[OptionGroupResponse])
+def get_option_catalog(
+    _: AdminAuth = Depends(require_admin), session: Session = Depends(get_session)
+) -> list[OptionGroupResponse]:
+    """Return the catalogue used by both the editor and public quiz snapshots."""
+    return catalogue(session)
+
+
+@router.put("/admin/option-groups", response_model=list[OptionGroupResponse])
+def put_option_catalog(
+    data: OptionCatalogUpdate,
+    _: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> list[OptionGroupResponse]:
+    """Save groups and options independently from draw strategy settings."""
+    question_service.replace_option_catalog(session, data)
+    return catalogue(session)
+
+
 @router.put("/admin/settings/strategy", response_model=SettingsResponse)
 def put_admin_strategy(
     data: StrategyUpdate,
@@ -362,19 +383,6 @@ def put_admin_strategy(
 ) -> SettingsResponse:
     """Save validated question count and star-weight strategy settings."""
     settings = question_service.update_strategy(
-        session, data, question_service.get_settings(session)
-    )
-    return settings_response(settings)
-
-
-@router.put("/admin/settings/font-presets", response_model=SettingsResponse)
-def put_admin_font_presets(
-    data: FontPresetsUpdate,
-    _: AdminAuth = Depends(require_admin),
-    session: Session = Depends(get_session),
-) -> SettingsResponse:
-    """Save validated font shortcut strings independently from draw settings."""
-    settings = question_service.update_font_presets(
         session, data, question_service.get_settings(session)
     )
     return settings_response(settings)

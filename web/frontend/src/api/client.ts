@@ -6,6 +6,7 @@ import type {
   PageResult,
   Question,
   QuestionPayload,
+  OptionGroup,
   QuizAttempt,
   QuizSettings,
   SubmissionDetail,
@@ -28,12 +29,19 @@ interface RawQuestion {
   text: string;
   image_url: string | null;
   difficulty: number;
-  options: string[];
+  option_groups?: RawOptionGroup[];
+  correct_option_id?: number;
+  correct_option?: RawFontOption;
+  correct_group?: RawOptionGroup;
+  configuration_error?: string | null;
   answer?: AnswerKey;
   explanation?: string;
   created_at?: string;
   updated_at?: string;
 }
+
+interface RawFontOption { id: number; name: string; minimum_difficulty: number; sort_order: number; }
+interface RawOptionGroup { id: number; name: string; sort_order: number; options: RawFontOption[]; }
 
 interface RawSettings {
   question_count: number;
@@ -53,6 +61,9 @@ interface RawSubmissionDetail {
   question_text: string;
   image_url?: string | null;
   options?: string[];
+  option_groups?: RawOptionGroup[] | null;
+  selected_option_id?: number | null;
+  correct_option_id?: number | null;
   selected: AnswerKey | null;
   correct_answer: AnswerKey;
   explanation: string;
@@ -164,10 +175,14 @@ function mapOptions(options: string[]): Record<AnswerKey, string> {
   return { A: options[0] ?? '', B: options[1] ?? '', C: options[2] ?? '', D: options[3] ?? '' };
 }
 
+function mapGroup(group: RawOptionGroup): OptionGroup {
+  return { id: String(group.id), name: group.name, sortOrder: group.sort_order, options: group.options.map((option) => ({ id: String(option.id), name: option.name, minimumDifficulty: option.minimum_difficulty, sortOrder: option.sort_order })) };
+}
+
 function mapQuestion(question: RawQuestion): Question {
   return {
     id: String(question.id), text: question.text, imageUrl: question.image_url,
-    difficulty: question.difficulty, options: mapOptions(question.options), answer: question.answer,
+    difficulty: question.difficulty, options: mapOptions([]), optionGroups: (question.option_groups || []).map(mapGroup), correctOptionId: question.correct_option_id ? String(question.correct_option_id) : undefined, correctOption: question.correct_option ? mapGroup({ id: 0, name: '', sort_order: 0, options: [question.correct_option] }).options[0] : undefined, correctGroup: question.correct_group ? mapGroup(question.correct_group) : undefined, configurationError: question.configuration_error ?? undefined, answer: question.answer,
     explanation: question.explanation, createdAt: question.created_at, updatedAt: question.updated_at,
   };
 }
@@ -177,10 +192,14 @@ function mapSettings(settings: RawSettings): QuizSettings {
 }
 
 function mapWrongAnswer(detail: RawSubmissionDetail): WrongAnswer {
+  const optionGroups = (detail.option_groups || []).map(mapGroup);
+  const names = new Map(optionGroups.flatMap((group) => group.options.map((option) => [option.id, option.name])));
+  const selected = detail.selected_option_id ? names.get(String(detail.selected_option_id)) ?? detail.selected : detail.selected;
+  const correct = detail.correct_option_id ? names.get(String(detail.correct_option_id)) ?? detail.correct_answer : detail.correct_answer;
   return {
     questionText: detail.question_text, imageUrl: detail.image_url ?? null,
-    options: detail.options ? mapOptions(detail.options) : {}, selected: detail.selected,
-    correct: detail.correct_answer, explanation: detail.explanation,
+    options: optionGroups.length ? {} : detail.options ? mapOptions(detail.options) : {}, selected,
+    correct, explanation: detail.explanation,
   };
 }
 
@@ -205,8 +224,7 @@ function mapDetail(result: RawSubmissionResult): SubmissionDetail {
 function toQuestionWrite(question: QuestionPayload): object {
   return {
     text: question.text, image_url: question.imageUrl, difficulty: question.difficulty,
-    options: [question.options.A, question.options.B, question.options.C, question.options.D],
-    answer: question.answer, explanation: question.explanation,
+    correct_option_id: Number(question.correctOptionId), explanation: question.explanation,
   };
 }
 
@@ -291,11 +309,12 @@ export const api = {
 
   getAdminSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/admin/settings')),
 
+  getOptionGroups: async (): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups')).map(mapGroup),
+
+  saveOptionGroups: async (groups: OptionGroup[]): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups', { method: 'PUT', body: JSON.stringify({ groups: groups.map((group) => ({ id: Number(group.id) || undefined, name: group.name, sort_order: group.sortOrder, options: group.options.map((option) => ({ id: Number(option.id) || undefined, name: option.name, minimum_difficulty: option.minimumDifficulty, sort_order: option.sortOrder })) })) }) })).map(mapGroup),
+
   saveStrategy: async (settings: Pick<QuizSettings, 'questionCount' | 'modes'>): Promise<QuizSettings> =>
     mapSettings(await request<RawSettings>('/admin/settings/strategy', { method: 'PUT', body: JSON.stringify({ question_count: settings.questionCount, modes: settings.modes }) })),
-
-  saveFontPresets: async (fontPresets: string[]): Promise<QuizSettings> =>
-    mapSettings(await request<RawSettings>('/admin/settings/font-presets', { method: 'PUT', body: JSON.stringify({ font_presets: fontPresets }) })),
 
   listSubmissions: async (page: number, displayName?: string): Promise<PageResult<SubmissionSummary>> => {
     const raw = await request<RawPage<RawSubmissionSummary>>(`/admin/submissions${queryString({ page, display_name: displayName })}`);

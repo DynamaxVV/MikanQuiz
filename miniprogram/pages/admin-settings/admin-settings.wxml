@@ -7,8 +7,8 @@
       <view wx:for="{{strategyRows}}" wx:key="key" class="mode"><view>{{item.title}}</view><view class="weights"><view wx:for="{{item.weights}}" wx:for-item="weight" wx:key="star"><text>{{weight.star}}★</text><input type="number" value="{{weight.value}}" data-mode="{{weight.mode}}" data-index="{{weight.index}}" bindinput="updateWeight" /></view></view></view>
       <button class="save" loading="{{savingStrategy}}" bind:tap="saveStrategy">保存出题策略</button>
     </view>
-    <view class="section">字体快捷输入</view>
-    <view class="card"><view class="help">每行一个字体名称；新增题目时可一键填入当前选项。</view><textarea value="{{fontText}}" placeholder="例如：宋体&#10;黑体" bindinput="updateFonts" auto-height /><button class="save" loading="{{savingFonts}}" bind:tap="saveFonts">保存字体快捷项</button></view>
+    <view class="section">字体快捷项</view>
+    <view class="card"><view class="help">按分区管理答题可选字体；字体从设置的最低星级开始出现。</view><view wx:for="{{optionGroups}}" wx:for-index="groupIndex" wx:key="id" class="font-group"><view class="font-group-title">{{item.name}}</view><view wx:for="{{item.options}}" wx:for-item="option" wx:for-index="optionIndex" wx:key="id" class="font-option"><input value="{{option.name}}" placeholder="字体名称" data-group="{{groupIndex}}" data-option="{{optionIndex}}" bindinput="updateOptionName" /><picker mode="selector" range="{{[1,2,3]}}" value="{{option.minimumDifficulty - 1}}" data-group="{{groupIndex}}" data-option="{{optionIndex}}" bindchange="updateOptionDifficulty"><view>{{option.minimumDifficulty}}★ 起</view></picker></view><button class="add-font" data-group="{{groupIndex}}" bind:tap="addOption">＋ 添加字体</button></view><button class="save" loading="{{savingOptions}}" bind:tap="saveOptions">保存字体快捷项</button></view>
     <view class="section">提交记录</view>
     <view class="card">
       <view wx:if="{{!submissionGroups.length}}" class="help">暂无提交记录</view>

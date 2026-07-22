@@ -22,25 +22,46 @@ class Base(DeclarativeBase):
     """Base class shared by all database models."""
 
 
+class OptionGroup(Base):
+    """An administrator-managed display section for font options."""
+
+    __tablename__ = "option_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class FontOption(Base):
+    """One font selectable from a group at and above its unlock difficulty."""
+
+    __tablename__ = "font_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("option_groups.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    minimum_difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        CheckConstraint("minimum_difficulty BETWEEN 1 AND 3", name="ck_font_option_difficulty"),
+    )
+
+
 class Question(Base):
-    """A fixed-four-option question and its current correct answer."""
+    """A question whose correct response is one reusable font option."""
 
     __tablename__ = "questions"
-    __table_args__ = (
-        CheckConstraint("difficulty BETWEEN 1 AND 5", name="ck_question_difficulty"),
-        CheckConstraint("answer IN ('A', 'B', 'C', 'D')", name="ck_question_answer"),
-    )
+    __table_args__ = (CheckConstraint("difficulty BETWEEN 1 AND 3", name="ck_question_difficulty"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     legacy_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     text: Mapped[str] = mapped_column(String(500), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
-    option_a: Mapped[str] = mapped_column(String(500), nullable=False)
-    option_b: Mapped[str] = mapped_column(String(500), nullable=False)
-    option_c: Mapped[str] = mapped_column(String(500), nullable=False)
-    option_d: Mapped[str] = mapped_column(String(500), nullable=False)
-    answer: Mapped[str] = mapped_column(String(1), nullable=False)
+    correct_option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("font_options.id", ondelete="SET NULL"), nullable=True
+    )
     explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -112,6 +133,7 @@ class QuizAttempt(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
     question_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    question_snapshots: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -149,7 +171,10 @@ class SubmissionAnswer(Base):
     question_text: Mapped[str] = mapped_column(String(500), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     options: Mapped[list[str]] = mapped_column(JSON, nullable=False)
-    selected: Mapped[str] = mapped_column(String(1), nullable=False)
-    correct_answer: Mapped[str] = mapped_column(String(1), nullable=False)
+    selected: Mapped[str] = mapped_column(String(64), nullable=False)
+    correct_answer: Mapped[str] = mapped_column(String(64), nullable=False)
+    option_groups: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    selected_option_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    correct_option_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)

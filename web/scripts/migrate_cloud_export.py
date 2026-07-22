@@ -15,8 +15,8 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.database import Database
-from app.models import Question, QuizAttempt, Submission, SubmissionAnswer
-from app.schemas import QuestionWrite, SettingsResponse
+from app.models import FontOption, OptionGroup, Question, QuizAttempt, Submission, SubmissionAnswer
+from app.schemas import SettingsResponse
 from app.security import hash_token, new_token
 from app.services.questions import get_settings
 
@@ -75,20 +75,14 @@ def resolve_image_url(
     return url
 
 
-def question_payload(
-    record: dict[str, Any], mapping: dict[str, str], hosts: list[str]
-) -> QuestionWrite:
-    """Convert old option and explanation shapes through current request validation."""
+def legacy_question_values(record: dict[str, Any], mapping: dict[str, str], hosts: list[str]) -> tuple[str, str | None, int, str, list[str]]:
+    """Read a legacy question without retaining its fixed option representation."""
     answer = str(record.get("answer") or "")
     explanation = record.get("explanation") or record.get("explanations", {}).get(answer)
-    return QuestionWrite(
-        text=record.get("text", ""),
-        image_url=resolve_image_url(record, mapping, hosts),
-        difficulty=record.get("difficulty"),
-        options=record.get("options", []),
-        answer=answer,
-        explanation=explanation or "",
-    )
+    options = [str(item).strip() for item in record.get("options", [])]
+    if len(options) != 4 or any(not item for item in options) or answer not in "ABCD" or not explanation:
+        raise ValueError("旧题目格式不正确")
+    return str(record.get("text", "")), resolve_image_url(record, mapping, hosts), int(record.get("difficulty")), str(explanation), options
 
 
 def verify_image(url: str, hosts: list[str]) -> None:
@@ -111,16 +105,23 @@ def import_questions(
         legacy_id = str(record.get("_id") or "").strip()
         if not legacy_id:
             raise ValueError("题目导出缺少 _id")
-        data = question_payload(record, mapping, hosts)
+        text, image_url, difficulty, explanation, options = legacy_question_values(record, mapping, hosts)
         question = session.query(Question).filter_by(legacy_id=legacy_id).one_or_none()
         if question is None:
-            question = Question(legacy_id=legacy_id)
+            other = session.query(OptionGroup).filter_by(name="其他").one()
+            option_by_name = {}
+            for position, option_name in enumerate(options):
+                option = session.query(FontOption).filter_by(group_id=other.id, name=option_name).one_or_none()
+                if option is None:
+                    option = FontOption(group_id=other.id, name=option_name, minimum_difficulty=1, sort_order=position)
+                    session.add(option)
+                    session.flush()
+                option_by_name[option_name] = option
+            correct_name = options[ord(str(record["answer"])) - ord("A")]
+            question = Question(legacy_id=legacy_id, correct_option_id=option_by_name[correct_name].id)
             session.add(question)
-        question.text = data.text
-        question.image_url = data.image_url
-        question.difficulty = data.difficulty
-        question.option_a, question.option_b, question.option_c, question.option_d = data.options
-        question.answer, question.explanation = data.answer, data.explanation
+        question.text, question.image_url, question.difficulty = text, image_url, difficulty
+        question.explanation = explanation
         imported[legacy_id] = question
     session.flush()
     return imported

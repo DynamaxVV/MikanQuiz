@@ -17,13 +17,13 @@ function testPublicQuestionDoesNotContainAnswer() {
     attempt_token: "token", mode: "beginner", expires_at: "2030-01-01T00:00:00Z",
     questions: [{
       id: "q-1", text: "题目", image_url: "https://images.example/q.jpg", difficulty: 2,
-      options: ["A", "B", "C", "D"], answer: "B", explanation: "不应出现",
+      option_groups: [{ id: 1, name: "其他", options: [{ id: 9, name: "黑体", minimum_difficulty: 1 }] }], correct_option_id: 9, explanation: "不应出现",
     }],
   });
   assert.strictEqual(attempt.attemptToken, "token");
   assert.deepStrictEqual(attempt.attempt.questions[0], {
     id: "q-1", text: "题目", imageUrl: "https://images.example/q.jpg", difficulty: 2,
-    options: ["A", "B", "C", "D"],
+    optionGroups: [{ id: "1", name: "其他", sortOrder: 0, options: [{ id: "9", name: "黑体", minimumDifficulty: 1 }] }],
   });
   assert.strictEqual("answer" in attempt.attempt.questions[0], false);
 }
@@ -68,13 +68,14 @@ async function testTransportHeadersAndPayloads() {
   await api.submitAttempt("attempt-token", { 1: "A" }, "昵称");
   await api.createAdminQuestion("admin-token", {
     text: "题目", imageUrl: "https://images.example/q.jpg", difficulty: 1,
-    options: ["A", "B", "C", "D"], answer: "A", explanation: "解析",
+    correctOptionId: "9", explanation: "解析",
   });
   assert.strictEqual(calls[0].header["X-Quiz-Attempt"], "attempt-token");
   assert.strictEqual(calls[0].header.Authorization, undefined);
   assert.strictEqual(calls[0].data.display_name, "昵称");
   assert.strictEqual(calls[1].header.Authorization, "Bearer admin-token");
   assert.strictEqual(calls[1].data.image_url, "https://images.example/q.jpg");
+  assert.strictEqual(calls[1].data.correct_option_id, 9);
   delete global.wx;
 }
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.database import Database
-from app.models import Question, Submission, SubmissionAnswer
+from app.models import FontOption, OptionGroup, Question, Submission, SubmissionAnswer
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "migrate_cloud_export.py"
@@ -23,11 +23,7 @@ def current_question() -> Question:
         text="当前题干",
         image_url="https://pan.yurucamp.cn/current.png",
         difficulty=1,
-        option_a="当前甲",
-        option_b="当前乙",
-        option_c="当前丙",
-        option_d="当前丁",
-        answer="A",
+        correct_option_id=1,
         explanation="当前解析",
     )
 
@@ -61,6 +57,10 @@ def test_history_import_uses_verified_export_snapshot_not_current_question(
 ) -> None:
     """Changed current answer and text must not alter a historical export snapshot."""
     with database.sessions() as session:
+        group = OptionGroup(name="其他", sort_order=0)
+        session.add(group)
+        session.flush()
+        session.add(FontOption(id=1, group_id=group.id, name="当前甲", minimum_difficulty=1, sort_order=0))
         question = current_question()
         session.add(question)
         session.flush()

@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 Mode = Literal["beginner", "proficient", "challenge"]
-Answer = Literal["A", "B", "C", "D"]
+Answer = int
 
 
 class ApiModel(BaseModel):
@@ -17,14 +17,51 @@ class ApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class OptionGroupWrite(ApiModel):
+    """One complete editable option group and its options."""
+
+    id: int | None = None
+    name: str = Field(min_length=1, max_length=100)
+    sort_order: int = Field(ge=0, le=10000)
+    options: list["FontOptionWrite"] = Field(default_factory=list)
+
+
+class FontOptionWrite(ApiModel):
+    """One editable font option nested beneath a group."""
+
+    id: int | None = None
+    name: str = Field(min_length=1, max_length=500)
+    minimum_difficulty: int = Field(ge=1, le=3)
+    sort_order: int = Field(ge=0, le=10000)
+
+
+class OptionCatalogUpdate(ApiModel):
+    """The complete catalogue, saved as one independent settings domain."""
+
+    groups: list[OptionGroupWrite] = Field(min_length=1, max_length=50)
+
+
+class FontOptionResponse(ApiModel):
+    id: int
+    name: str
+    minimum_difficulty: int
+    sort_order: int
+
+
+class OptionGroupResponse(ApiModel):
+    id: int
+    name: str
+    sort_order: int
+    options: list[FontOptionResponse]
+
+
 class QuestionWrite(ApiModel):
-    """The complete editable representation of one fixed-option question."""
+    """The complete editable representation of a catalogue-backed question."""
 
     text: str = Field(min_length=1, max_length=500)
-    image_url: str | None = Field(default=None, max_length=2048)
-    difficulty: int = Field(ge=1, le=5)
-    options: list[str]
-    answer: Answer
+    image_url: str = Field(min_length=1, max_length=2048)
+    difficulty: int = Field(ge=1, le=3)
+    correct_option_id: int = Field(gt=0)
     explanation: str = Field(min_length=1, max_length=1000)
 
     @field_validator("text", "explanation", mode="after")
@@ -38,36 +75,23 @@ class QuestionWrite(ApiModel):
 
     @field_validator("image_url", mode="after")
     @classmethod
-    def validate_image_url(cls, value: str | None) -> str | None:
-        """Permit only external HTTPS image references in this first release."""
-        if value is None or not value.strip():
-            return None
+    def validate_image_url(cls, value: str) -> str:
+        """Require an externally deliverable HTTPS image for every question."""
         value = value.strip()
+        if not value:
+            raise ValueError("请上传题图")
         parsed = urlparse(value)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("图片地址必须是 HTTPS URL")
         return value
-
-    @field_validator("options", mode="after")
-    @classmethod
-    def validate_options(cls, values: list[str]) -> list[str]:
-        """Require exactly four non-empty options with safe display lengths."""
-        if len(values) != 4:
-            raise ValueError("必须填写选项")
-        cleaned = [value.strip() for value in values]
-        if any(not value or len(value) > 500 for value in cleaned):
-            raise ValueError("选项不能为空且不能超过 500 字")
-        return cleaned
-
 
 class QuestionPatch(ApiModel):
     """A partial question update, validated as a whole after merging server data."""
 
     text: str | None = Field(default=None, min_length=1, max_length=500)
     image_url: str | None = Field(default=None, max_length=2048)
-    difficulty: int | None = Field(default=None, ge=1, le=5)
-    options: list[str] | None = None
-    answer: Answer | None = None
+    difficulty: int | None = Field(default=None, ge=1, le=3)
+    correct_option_id: int | None = Field(default=None, gt=0)
     explanation: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
@@ -78,8 +102,10 @@ class QuestionResponse(ApiModel):
     text: str
     image_url: str | None
     difficulty: int
-    options: list[str]
-    answer: Answer
+    correct_option_id: int | None
+    correct_option: FontOptionResponse | None
+    correct_group: OptionGroupResponse | None
+    configuration_error: str | None = None
     explanation: str
     created_at: datetime
     updated_at: datetime
@@ -141,7 +167,7 @@ class PublicQuestion(ApiModel):
     text: str
     image_url: str | None
     difficulty: int
-    options: list[str]
+    option_groups: list[OptionGroupResponse]
 
 
 class QuestionPage(ApiModel):
@@ -162,13 +188,13 @@ class SettingsResponse(ApiModel):
 
     @model_validator(mode="after")
     def validate_modes(self) -> "SettingsResponse":
-        """Ensure all modes have five non-negative weights and a selectable star."""
+        """Ensure all modes have three non-negative weights and a selectable star."""
         expected = {"beginner", "proficient", "challenge"}
         if set(self.modes) != expected:
             raise ValueError("必须提供三种难度的权重")
         for weights in self.modes.values():
-            if len(weights) != 5 or any(weight < 0 for weight in weights):
-                raise ValueError("每种难度需要五个非负权重")
+            if len(weights) != 3 or any(weight < 0 for weight in weights):
+                raise ValueError("每种难度需要三个非负权重")
             if not any(weight > 0 for weight in weights):
                 raise ValueError("每种难度至少一个权重大于零")
         if len(self.font_presets) > 100 or any(
@@ -192,12 +218,6 @@ class StrategyUpdate(ApiModel):
             modes=self.modes,
             font_presets=font_presets,
         )
-
-
-class FontPresetsUpdate(ApiModel):
-    """The subset of settings editable on the font shortcuts screen."""
-
-    font_presets: list[str]
 
 
 class AttemptCreate(ApiModel):
@@ -227,7 +247,7 @@ class AttemptSubmit(ApiModel):
     """The complete selection map submitted once for one server-bound attempt."""
 
     display_name: str = Field(default="", max_length=20)
-    answers: dict[int, Answer]
+    answers: dict[int, int]
 
     @field_validator("display_name", mode="after")
     @classmethod
@@ -243,8 +263,11 @@ class SubmissionDetail(ApiModel):
     question_text: str
     image_url: str | None
     options: list[str]
-    selected: Answer
-    correct_answer: Answer
+    option_groups: list[OptionGroupResponse] | None = None
+    selected: str | None
+    correct_answer: str
+    selected_option_id: int | None = None
+    correct_option_id: int | None = None
     explanation: str
     is_correct: bool
 

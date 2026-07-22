@@ -1,5 +1,8 @@
 export type DifficultyMode = 'beginner' | 'proficient' | 'challenge';
-export type AnswerKey = 'A' | 'B' | 'C' | 'D';
+export type AnswerKey = string;
+
+export interface FontOption { id: string; name: string; minimumDifficulty: number; sortOrder: number; }
+export interface OptionGroup { id: string; name: string; sortOrder: number; options: FontOption[]; }
 
 export interface QuizSettings {
   questionCount: number;
@@ -13,6 +16,11 @@ export interface Question {
   imageUrl: string | null;
   difficulty: number;
   options: Record<AnswerKey, string>;
+  optionGroups: OptionGroup[];
+  correctOptionId?: string;
+  correctOption?: FontOption;
+  correctGroup?: OptionGroup;
+  configurationError?: string;
   answer?: AnswerKey;
   explanation?: string;
   createdAt?: string;
@@ -78,8 +86,7 @@ export interface QuestionPayload {
   text: string;
   imageUrl: string | null;
   difficulty: number;
-  options: Record<AnswerKey, string>;
-  answer: AnswerKey;
+  correctOptionId: string;
   explanation: string;
 }
 

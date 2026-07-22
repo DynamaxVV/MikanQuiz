@@ -11,17 +11,13 @@ function formatQuestions(questions, includeResult, attemptQuestions) {
       text: question.text || (original && original.text) || "",
       imageUrl: question.imageUrl || (original && original.imageUrl) || "",
       difficulty,
-      answer: includeResult ? question.answer : "",
+      answer: includeResult ? String(question.answer || question.correctOptionId || "") : "",
       selected: question.selected || "",
       selectedExplanation: includeResult ? question.explanation || "" : "",
       isCorrect: Boolean(question.isCorrect),
       number: index + 1,
       stars,
-      optionItems: ((question.options && question.options.length)
-        ? question.options : (original && original.optionItems.map((item) => item.text)) || [])
-        .map((text, optionIndex) => ({
-        key: String.fromCharCode(65 + optionIndex), text,
-      })),
+      optionGroups: question.optionGroups || (original && original.optionGroups) || [],
     };
   });
 }
@@ -46,7 +42,7 @@ Page({
     const list = this.data.result ? this.data.result.wrongDetails : this.data.questions;
     const question = list[index];
     if (!question) return this.setData({ currentQuestion: null });
-    question.selected = this.data.answers[question._id] || question.selected || "";
+    question.selected = String(this.data.answers[question._id] || question.selected || "");
     this.setData({ currentIndex: index, currentQuestion: question });
   },
 

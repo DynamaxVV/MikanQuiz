@@ -11,7 +11,7 @@ const router = useRouter();
 const questions = ref<Question[]>([]);
 const page = ref(1);
 const total = ref(0);
-const difficulties = ref([1, 2, 3, 4, 5]);
+const difficulties = ref([1, 2, 3]);
 const loading = ref(false);
 const error = ref('');
 
@@ -60,7 +60,7 @@ onMounted(load);
   <AdminShell v-slot="{ session }">
     <section class="admin-content" aria-labelledby="questions-title">
       <header class="page-header"><div><p class="eyebrow">管理员 · {{ session.username }}</p><h1 id="questions-title" class="page-title">题库</h1><p class="page-description">查看和维护现有题目。</p></div></header>
-      <section class="toolbar card"><span>难度</span><div class="difficulty-tags" aria-label="按难度筛选"><button v-for="star in 5" :key="star" type="button" :class="{ selected: difficulties.includes(star) }" :aria-pressed="difficulties.includes(star)" @click="toggleDifficulty(star)">{{ '★'.repeat(star) }}</button></div></section>
+      <section class="toolbar card"><span>难度</span><div class="difficulty-tags" aria-label="按难度筛选"><button v-for="star in 3" :key="star" type="button" :class="{ selected: difficulties.includes(star) }" :aria-pressed="difficulties.includes(star)" @click="toggleDifficulty(star)">{{ '★'.repeat(star) }}</button></div></section>
       <ErrorPanel v-if="error" :message="error" @retry="load" />
       <section v-else-if="loading" class="loading card">正在读取题库…</section>
       <section v-else-if="questions.length === 0" class="empty-state card"><strong>还没有题目</strong><RouterLink to="/admin/questions/new">新增第一道题</RouterLink></section>

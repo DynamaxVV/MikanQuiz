@@ -1,4 +1,4 @@
-"""Anonymous attempt selection, strict grading and idempotent submission."""
+"""Anonymous attempt selection, snapshot grading and idempotent submission."""
 
 from datetime import timedelta
 import random
@@ -8,75 +8,46 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
-from app.models import (
-    Question,
-    QuizAttempt,
-    Submission,
-    SubmissionAnswer,
-    as_utc,
-    utc_now,
-)
-from app.schemas import AttemptSubmit, PublicQuestion, SubmissionResult
+from app.models import Question, QuizAttempt, Submission, SubmissionAnswer, as_utc, utc_now
+from app.schemas import AttemptSubmit, PublicQuestion
 from app.security import hash_token, new_token
 from app.services.questions import get_settings
-from app.services.serializers import public_question, submission_result
+from app.services.serializers import catalogue, public_question, submission_result
 
 
 class RandomSource(Protocol):
-    """The small random surface needed by weighted selection tests."""
-
-    def random(self) -> float:
-        """Return a pseudo-random value in the half-open unit interval."""
+    def random(self) -> float: ...
 
 
-def create_attempt(
-    session: Session, mode: str, random_source: RandomSource | None = None
-) -> tuple[str, QuizAttempt, list[PublicQuestion]]:
-    """Bind a random eligible subset to one opaque 24-hour attempt token."""
+def create_attempt(session: Session, mode: str, random_source: RandomSource | None = None) -> tuple[str, QuizAttempt, list[PublicQuestion]]:
     settings = get_settings(session)
-    questions = session.scalars(select(Question)).all()
-    selected = select_questions(
-        questions, settings.question_count, settings.modes[mode], random_source
-    )
+    selected = select_questions(session.scalars(select(Question)).all(), settings.question_count, settings.modes[mode], random_source)
+    if any(question.correct_option_id is None for question in selected):
+        raise ApiError(409, "QUESTION_FONT_MISSING", "题库有题目的正确字体已被删除，请管理员修复后再开始练习")
+    snapshots = []
+    for question in selected:
+        snapshot = public_question(session, question).model_dump(mode="json")
+        snapshot["correct_option_id"] = question.correct_option_id
+        snapshot["explanation"] = question.explanation
+        snapshots.append(snapshot)
     token = new_token()
-    attempt = QuizAttempt(
-        token_hash=hash_token(token),
-        mode=mode,
-        question_ids=[question.id for question in selected],
-        expires_at=utc_now() + timedelta(hours=24),
-    )
+    attempt = QuizAttempt(token_hash=hash_token(token), mode=mode, question_ids=[item.id for item in selected], question_snapshots=snapshots, expires_at=utc_now() + timedelta(hours=24))
     session.add(attempt)
     session.commit()
     session.refresh(attempt)
-    return token, attempt, [public_question(question) for question in selected]
+    return token, attempt, [_public_snapshot(item) for item in snapshots]
 
 
-def select_questions(
-    questions: list[Question], count: int, weights: list[int], random_source: RandomSource | None = None
-) -> list[Question]:
-    """Choose distinct questions by difficulty weight without replacement."""
+def select_questions(questions: list[Question], count: int, weights: list[int], random_source: RandomSource | None = None) -> list[Question]:
     eligible = [question for question in questions if weights[question.difficulty - 1] > 0]
     if not eligible:
-        raise ApiError(
-            409,
-            "QUIZ_NOT_ENOUGH_QUESTIONS",
-            "当前难度没有可用题目，请录入符合该难度权重的题目或调整出题策略",
-        )
-    count = min(count, len(eligible))
+        raise ApiError(409, "QUIZ_NOT_ENOUGH_QUESTIONS", "当前难度没有可用题目，请录入符合该难度权重的题目或调整出题策略")
     source = random_source or random.SystemRandom()
-    selected: list[Question] = []
-    while len(selected) < count:
-        question = _weighted_pop(eligible, weights, source)
-        selected.append(question)
-    return selected
+    return [_weighted_pop(eligible, weights, source) for _ in range(min(count, len(eligible)))]
 
 
-def _weighted_pop(
-    candidates: list[Question], weights: list[int], random_source: RandomSource
-) -> Question:
-    """Remove one candidate using its current star weight as its probability."""
-    total = sum(weights[item.difficulty - 1] for item in candidates)
-    cursor = random_source.random() * total
+def _weighted_pop(candidates: list[Question], weights: list[int], random_source: RandomSource) -> Question:
+    cursor = random_source.random() * sum(weights[item.difficulty - 1] for item in candidates)
     for index, question in enumerate(candidates):
         cursor -= weights[question.difficulty - 1]
         if cursor < 0:
@@ -85,129 +56,68 @@ def _weighted_pop(
 
 
 def current_attempt(session: Session, token: str) -> tuple[QuizAttempt, list[PublicQuestion]]:
-    """Return an unfinished unexpired attempt without leaking answer fields."""
     attempt = get_attempt(session, token)
     if attempt.submitted_at is not None:
         raise ApiError(409, "ATTEMPT_ALREADY_SUBMITTED", "本次答题已经提交")
     ensure_unexpired(attempt)
-    return attempt, attempt_questions(session, attempt)
+    return attempt, [_public_snapshot(item) for item in attempt.question_snapshots]
 
 
-def submit_attempt(
-    session: Session, token: str, data: AttemptSubmit
-) -> SubmissionResult:
-    """Score exactly one attempt's bound questions and persist immutable snapshots."""
-    attempt = get_attempt(session, token)
-    existing = submission_for_attempt(session, attempt.id)
-    if existing is not None:
-        return stored_result(session, existing)
-    ensure_unexpired(attempt)
-    questions = attempt_questions_models(session, attempt)
-    validate_answers(data.answers, questions)
-    submission = build_submission(attempt, data, questions)
-    session.add(submission)
-    session.flush()
-    persist_answer_snapshots(session, submission, questions, data.answers)
-    attempt.submitted_at = utc_now()
-    session.commit()
-    return stored_result(session, submission)
+def _public_snapshot(snapshot: dict) -> PublicQuestion:
+    """Strip server-only answer fields before an attempt reaches a client."""
+    return PublicQuestion.model_validate({key: snapshot[key] for key in ("id", "text", "image_url", "difficulty", "option_groups")})
 
 
 def get_attempt(session: Session, token: str) -> QuizAttempt:
-    """Resolve an opaque client token without storing or returning it."""
     if not token:
         raise ApiError(401, "ATTEMPT_TOKEN_REQUIRED", "缺少答题会话")
-    attempt = session.scalar(
-        select(QuizAttempt).where(QuizAttempt.token_hash == hash_token(token))
-    )
+    attempt = session.scalar(select(QuizAttempt).where(QuizAttempt.token_hash == hash_token(token)))
     if attempt is None:
         raise ApiError(404, "ATTEMPT_NOT_FOUND", "答题会话不存在")
     return attempt
 
 
 def ensure_unexpired(attempt: QuizAttempt) -> None:
-    """Reject a resume or first submit after the documented 24-hour lifetime."""
     if as_utc(attempt.expires_at) <= utc_now():
         raise ApiError(410, "ATTEMPT_EXPIRED", "本次答题已过期，请重新开始")
 
 
-def attempt_questions(session: Session, attempt: QuizAttempt) -> list[PublicQuestion]:
-    """Resolve bound questions in their original randomized order for a client."""
-    return [public_question(question) for question in attempt_questions_models(session, attempt)]
+def submit_attempt(session: Session, token: str, data: AttemptSubmit):
+    attempt = get_attempt(session, token)
+    existing = submission_for_attempt(session, attempt.id)
+    if existing is not None:
+        return stored_result(session, existing)
+    ensure_unexpired(attempt)
+    snapshots = {item["id"]: item for item in attempt.question_snapshots}
+    validate_answers(data.answers, snapshots)
+    correct_count = sum(data.answers[question_id] == snapshots[question_id]["correct_option_id"] for question_id in snapshots)
+    total = len(snapshots)
+    submission = Submission(attempt_id=attempt.id, display_name=data.display_name, mode=attempt.mode, score=(correct_count * 100 + total // 2) // total, correct_count=correct_count, total=total)
+    session.add(submission)
+    session.flush()
+    for question_id, snapshot in snapshots.items():
+        selected = data.answers[question_id]
+        correct = snapshot["correct_option_id"]
+        groups = snapshot["option_groups"]
+        session.add(SubmissionAnswer(submission_id=submission.id, question_id=question_id, question_text=snapshot["text"], image_url=snapshot.get("image_url"), options=[], option_groups=groups, selected=str(selected), correct_answer=str(correct), selected_option_id=selected, correct_option_id=correct, explanation=snapshot["explanation"], is_correct=selected == correct))
+    attempt.submitted_at = utc_now()
+    session.commit()
+    return stored_result(session, submission)
 
 
-def attempt_questions_models(session: Session, attempt: QuizAttempt) -> list[Question]:
-    """Load all bound questions and fail loudly if data integrity was broken."""
-    rows = session.scalars(select(Question).where(Question.id.in_(attempt.question_ids))).all()
-    by_id = {question.id: question for question in rows}
-    try:
-        return [by_id[question_id] for question_id in attempt.question_ids]
-    except KeyError as error:
-        raise ApiError(409, "ATTEMPT_QUESTION_MISSING", "答题题目已被移除") from error
-
-
-def validate_answers(answers: dict[int, str], questions: list[Question]) -> None:
-    """Require exactly one valid option for every and only bound question ID."""
-    expected_ids = {question.id for question in questions}
-    if set(answers) != expected_ids:
+def validate_answers(answers: dict[int, int], snapshots: dict[int, dict]) -> None:
+    if set(answers) != set(snapshots):
         raise ApiError(422, "INVALID_ANSWERS", "答案必须完整且只能包含本次题目")
-    if any(answer not in {"A", "B", "C", "D"} for answer in answers.values()):
-        raise ApiError(422, "INVALID_ANSWERS", "答案选项不正确")
-
-
-def build_submission(
-    attempt: QuizAttempt, data: AttemptSubmit, questions: list[Question]
-) -> Submission:
-    """Calculate integer scoring only from the server-owned attempt subset."""
-    correct_count = sum(data.answers[question.id] == question.answer for question in questions)
-    total = len(questions)
-    score = (correct_count * 100 + total // 2) // total
-    return Submission(
-        attempt_id=attempt.id,
-        display_name=data.display_name,
-        mode=attempt.mode,
-        score=score,
-        correct_count=correct_count,
-        total=total,
-    )
-
-
-def persist_answer_snapshots(
-    session: Session, submission: Submission, questions: list[Question], answers: dict[int, str]
-) -> None:
-    """Write historical snapshots before later question edits can alter their meaning."""
-    for question in questions:
-        selected = answers[question.id]
-        session.add(
-            SubmissionAnswer(
-                submission_id=submission.id,
-                question_id=question.id,
-                question_text=question.text,
-                image_url=question.image_url,
-                options=[
-                    question.option_a,
-                    question.option_b,
-                    question.option_c,
-                    question.option_d,
-                ],
-                selected=selected,
-                correct_answer=question.answer,
-                explanation=question.explanation,
-                is_correct=selected == question.answer,
-            )
-        )
+    for question_id, selected in answers.items():
+        visible = {item["id"] for group in snapshots[question_id]["option_groups"] for item in group["options"]}
+        if selected not in visible:
+            raise ApiError(422, "INVALID_ANSWERS", "答案不属于该题可选字体")
 
 
 def submission_for_attempt(session: Session, attempt_id: int) -> Submission | None:
-    """Find the sole score row that makes a retry idempotent."""
     return session.scalar(select(Submission).where(Submission.attempt_id == attempt_id))
 
 
-def stored_result(session: Session, submission: Submission) -> SubmissionResult:
-    """Read persisted snapshots rather than recalculating a historical result."""
-    answers = session.scalars(
-        select(SubmissionAnswer)
-        .where(SubmissionAnswer.submission_id == submission.id)
-        .order_by(SubmissionAnswer.id)
-    ).all()
+def stored_result(session: Session, submission: Submission):
+    answers = session.scalars(select(SubmissionAnswer).where(SubmissionAnswer.submission_id == submission.id).order_by(SubmissionAnswer.id)).all()
     return submission_result(submission, answers)

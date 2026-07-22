@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import AnswerOption from '@/components/AnswerOption.vue';
 import BrandHeader from '@/components/BrandHeader.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import QuestionMedia from '@/components/QuestionMedia.vue';
@@ -28,19 +27,6 @@ function choose(answer: AnswerKey): void {
   missingNotice.value = '';
 }
 
-function moveAnswer(answer: AnswerKey, direction: 'previous' | 'next', event: KeyboardEvent): void {
-  event.preventDefault();
-  const options: AnswerKey[] = ['A', 'B', 'C', 'D'];
-  const index = options.indexOf(answer);
-  const offset = direction === 'next' ? 1 : -1;
-  const nextAnswer = options[(index + offset + options.length) % options.length];
-  choose(nextAnswer);
-  void nextTick(() => {
-    const name = `question-${currentQuestion.value?.id ?? ''}`;
-    document.querySelector<HTMLInputElement>(`input[type="radio"][name="${name}"][value="${nextAnswer}"]`)?.focus();
-  });
-}
-
 async function submitAnswers(): Promise<void> {
   if (!attempt.value) return;
   if (!completed.value) {
@@ -60,9 +46,6 @@ async function submitAnswers(): Promise<void> {
 function onKeydown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
-  if (event.key >= 'a' && event.key <= 'd') choose(event.key.toUpperCase() as AnswerKey);
-  if (event.key >= 'A' && event.key <= 'D') choose(event.key as AnswerKey);
-  if (event.key >= '1' && event.key <= '4') choose(String.fromCharCode(64 + Number(event.key)) as AnswerKey);
   if (event.key === 'ArrowLeft') { event.preventDefault(); previous(); }
   if (event.key === 'ArrowRight') { event.preventDefault(); next(); }
 }
@@ -105,9 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" />
           </section>
           <section class="answer-panel" aria-label="答案选项">
-            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`">
-              <AnswerOption v-for="key in ['A', 'B', 'C', 'D']" :key="key" :answer="key as AnswerKey" :name="`question-${currentQuestion.id}`" :text="currentQuestion.options[key as AnswerKey]" :selected="answers[currentQuestion.id] === key" @select="choose" @move="moveAnswer" />
-            </div>
+            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :class="{ selected: answers[currentQuestion.id] === option.id }" @click="choose(option.id)">{{ option.name }}</button></section></div>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>
             <p v-if="error" class="status-error" role="alert">{{ error }}</p>
             <div class="question-navigation">
@@ -141,9 +122,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .quiz-layout { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); gap: 28px; padding: 28px 0 64px; }
 .question-panel { padding: 28px; }
 .question-panel h1 { margin: 0 0 24px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.3; letter-spacing: -.015em; }
-.quiz-media :deep(.image-button) { height: min(60vh, 620px); }
+.quiz-media :deep(.image-button) { height: min(42vh, 360px); }
 .answer-panel { position: sticky; top: 18px; align-self: start; padding: 8px 0; }
 .answers { display: grid; gap: 12px; }
+.option-group { padding: 16px; border: 1px solid var(--color-border); border-radius: 16px; background: #fffdf9; }
+.option-group h2 { margin: 0 0 10px; color: #85451e; font-size: 17px; }
+.option-group button { margin: 0 8px 8px 0; border: 1px solid transparent; border-radius: 999px; padding: 8px 12px; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; }
+.option-group button:hover { border-color: #edcfac; color: #85451e; background: #fff8ed; }
+.option-group button.selected { border-color: #d58a45; color: #85451e; background: #fff0d8; }
+.option-group button:focus-visible { outline: 3px solid rgba(213, 138, 69, .3); outline-offset: 2px; }
 .question-navigation { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
 .primary, .secondary { min-height: 46px; border-radius: var(--radius-button); padding: 0 20px; font-weight: 700; }
 .primary { border: 1px solid var(--color-action); color: #fff; background: var(--color-action); }

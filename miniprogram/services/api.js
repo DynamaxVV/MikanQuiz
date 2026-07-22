@@ -68,14 +68,39 @@ function request(path, options) {
   });
 }
 
+function uploadAdminImage(token, filePath) {
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${getBaseUrl()}/admin/images`, filePath, name: "image",
+      header: { Authorization: `Bearer ${token}` },
+      success(response) {
+        let payload;
+        try { payload = JSON.parse(response.data || "{}"); }
+        catch (error) { reject(new ApiError("图片上传响应无效", response.statusCode)); return; }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(unwrap(payload).image_url || unwrap(payload).imageUrl || "");
+          return;
+        }
+        clearExpiredCredential({ token }, response.statusCode);
+        reject(readError(payload, response.statusCode));
+      },
+      fail(error) { reject(new ApiError(error.errMsg || "图片上传失败", 0, "NETWORK_ERROR")); },
+    });
+  });
+}
+
 function normalizeImageUrl(item) {
   return item.imageUrl || item.image_url || "";
 }
 
-function normalizeOptions(item) {
-  if (Array.isArray(item.options)) return item.options.slice(0, 4);
-  return [item.optionA || item.option_a, item.optionB || item.option_b,
-    item.optionC || item.option_c, item.optionD || item.option_d];
+function normalizeOptionGroups(item) {
+  return (item.optionGroups || item.option_groups || []).map((group) => ({
+    id: String(group.id), name: group.name, sortOrder: group.sortOrder || group.sort_order || 0,
+    options: (group.options || []).map((option) => ({
+      id: String(option.id), name: option.name,
+      minimumDifficulty: option.minimumDifficulty || option.minimum_difficulty || 1,
+    })),
+  }));
 }
 
 function normalizePublicQuestion(item) {
@@ -84,13 +109,16 @@ function normalizePublicQuestion(item) {
     text: item.text || "",
     imageUrl: normalizeImageUrl(item),
     difficulty: item.difficulty || 1,
-    options: normalizeOptions(item),
+    optionGroups: normalizeOptionGroups(item),
   };
 }
 
 function normalizeAdminQuestion(item) {
   const question = normalizePublicQuestion(item);
-  question.answer = item.answer || "A";
+  question.correctOptionId = String(item.correctOptionId || item.correct_option_id || "");
+  question.correctOption = item.correctOption || item.correct_option || null;
+  question.correctGroup = item.correctGroup || item.correct_group || null;
+  question.configurationError = item.configurationError || item.configuration_error || "";
   question.explanation = item.explanation || "";
   return question;
 }
@@ -120,9 +148,9 @@ function normalizeSubmission(payload) {
       const question = normalizeAdminQuestion(item);
       question.id = String(item.questionId || item.question_id || item.id || "");
       question.text = item.questionText || item.question_text || item.text || "";
-      question.options = Array.isArray(item.options) ? normalizeOptions(item) : [];
-      question.selected = item.selected || "";
-      question.answer = item.correctAnswer || item.correct_answer || item.answer || "";
+      question.optionGroups = normalizeOptionGroups(item);
+      question.selected = String(item.selectedOptionId || item.selected_option_id || item.selected || "");
+      question.answer = String(item.correctOptionId || item.correct_option_id || item.correctAnswer || item.correct_answer || "");
       question.isCorrect = Boolean(item.isCorrect || item.is_correct);
       return question;
     }),
@@ -154,8 +182,7 @@ function normalizeQuestionPayload(question) {
     text: question.text,
     image_url: question.imageUrl || null,
     difficulty: question.difficulty,
-    options: question.options,
-    answer: question.answer,
+    correct_option_id: Number(question.correctOptionId),
     explanation: question.explanation,
   };
 }
@@ -270,15 +297,25 @@ async function getAdminSettings(token) {
   return normalizeSettings(await request("/admin/settings", { token }));
 }
 
-function saveQuizStrategy(token, settings) {
-  return request("/admin/settings/strategy", {
-    method: "PUT", token, data: { question_count: settings.questionCount, modes: settings.modes },
+async function getOptionGroups(token) {
+  return normalizeOptionGroups(await request("/admin/option-groups", { token }));
+}
+
+function saveOptionGroups(token, groups) {
+  return request("/admin/option-groups", {
+    method: "PUT", token, data: { groups: groups.map((group, groupIndex) => ({
+      id: group.id ? Number(group.id) : undefined, name: group.name, sort_order: groupIndex,
+      options: (group.options || []).map((option, optionIndex) => ({
+        id: option.id ? Number(option.id) : undefined, name: option.name,
+        minimum_difficulty: Number(option.minimumDifficulty || 1), sort_order: optionIndex,
+      })),
+    })) },
   });
 }
 
-function saveFontPresets(token, fontPresets) {
-  return request("/admin/settings/font-presets", {
-    method: "PUT", token, data: { font_presets: fontPresets },
+function saveQuizStrategy(token, settings) {
+  return request("/admin/settings/strategy", {
+    method: "PUT", token, data: { question_count: settings.questionCount, modes: settings.modes },
   });
 }
 
@@ -313,6 +350,7 @@ module.exports = {
   getAdminQuestion,
   getAdminSession,
   getAdminSettings,
+  getOptionGroups,
   getCurrentAttempt,
   getQuizSettings,
   getStoredAttempt,
@@ -320,10 +358,11 @@ module.exports = {
   listSubmissions,
   login,
   logout,
-  saveFontPresets,
+  saveOptionGroups,
   saveQuizStrategy,
   saveStoredAttempt,
   submitAttempt,
+  uploadAdminImage,
   updateAdminQuestion,
   __internal: { normalizeAttempt, normalizePublicQuestion, normalizeSubmission },
 };

@@ -1,1 +1,27 @@
-page { background:#fff9f0; color:#332718; }.page { padding:26rpx 26rpx 70rpx; }.hint { background:#fff0d8; border-radius:14rpx; color:#965b08; font-size:24rpx; line-height:1.55; margin-bottom:20rpx; padding:18rpx; }.form-card { background:#fff; border:1rpx solid #f3e4d1; border-radius:26rpx; box-shadow:0 12rpx 32rpx rgba(116,72,20,.07); padding:30rpx; }.textarea,.input-row { border-bottom:1rpx solid #f0e4d6; box-sizing:border-box; font-size:29rpx; padding:22rpx 4rpx; width:100%; }.textarea { min-height:92rpx; }.difficulty-picker,.answer-row { align-items:center; color:#5f4c38; display:flex; font-size:27rpx; justify-content:space-between; padding:24rpx 4rpx; }.star { color:#e7d7c4; font-size:40rpx; margin-left:8rpx; }.star.active { color:#ff9800; }.image-url { border-bottom:1rpx solid #f0e4d6; padding-bottom:20rpx; }.image-url input { box-sizing:border-box; color:#493522; font-size:26rpx; padding:16rpx 4rpx; width:100%; }.thumbnail { border-radius:14rpx; height:180rpx; margin-top:12rpx; width:180rpx; }.option-label,.analysis-title { color:#725e48; font-size:26rpx; font-weight:700; padding:22rpx 4rpx 4rpx; }.input-row { align-items:center; display:flex; }.input-row text { color:#e37e00; font-weight:700; margin-right:20rpx; width:30rpx; }.input-row input { flex:1; }.preset-box { background:#fff8ed; border-radius:14rpx; margin:18rpx 0 4rpx; padding:18rpx; }.preset-title { color:#987049; font-size:22rpx; margin-bottom:12rpx; }.preset-list { display:flex; flex-wrap:wrap; gap:12rpx; }.preset { background:#fff; border:1rpx solid #f0ddc5; border-radius:999rpx; color:#8b5c28; font-size:24rpx; padding:9rpx 16rpx; }.preset:active { background:#ffe8c2; }.answer-row radio { transform:scale(.75); }.analysis-input { border-top:1rpx solid #f0e4d6; border-bottom:0; }.save { background:#c96d32; border-radius:16rpx; box-shadow:0 14rpx 26rpx rgba(201,109,50,.2); color:#fff; font-size:30rpx; margin:22rpx 0 0; }.save:active { background:#ad5620; transform:scale(.98); }
+page { background: #fff9f0; color: #332718; }
+.page { padding: 26rpx 26rpx 70rpx; }
+.hint { margin-bottom: 20rpx; border-radius: 14rpx; padding: 18rpx; color: #965b08; background: #fff0d8; font-size: 24rpx; line-height: 1.55; }
+.form-card { border: 1rpx solid #f3e4d1; border-radius: 26rpx; padding: 30rpx; background: #fff; box-shadow: 0 12rpx 32rpx rgba(116, 72, 20, .07); }
+.textarea, .input-row { box-sizing: border-box; width: 100%; border-bottom: 1rpx solid #f0e4d6; padding: 22rpx 4rpx; font-size: 29rpx; }
+.textarea { min-height: 92rpx; }
+.difficulty-picker, .answer-row { display: flex; align-items: center; justify-content: space-between; padding: 24rpx 4rpx; color: #5f4c38; font-size: 27rpx; }
+.star { margin-left: 8rpx; color: #e7d7c4; font-size: 40rpx; }
+.star.active { color: #ff9800; }
+.image-upload { border-bottom: 1rpx solid #f0e4d6; padding-bottom: 20rpx; }
+.upload-button { margin: 12rpx 0 0; border: 1rpx solid #e8c99f; border-radius: 12rpx; color: #93551e; background: #fff8ed; font-size: 25rpx; }
+.image-preview { display: flex; align-items: center; gap: 18rpx; margin-top: 16rpx; }
+.image-preview image { width: 180rpx; height: 180rpx; border-radius: 14rpx; }
+.image-preview text { color: #b5483f; font-size: 24rpx; }
+.option-label, .analysis-title { padding: 22rpx 4rpx 4rpx; color: #725e48; font-size: 26rpx; font-weight: 700; }
+.input-row { display: flex; align-items: center; }
+.input-row text { width: 30rpx; margin-right: 20rpx; color: #e37e00; font-weight: 700; }
+.input-row input { flex: 1; }
+.preset-box { margin: 18rpx 0 4rpx; border-radius: 14rpx; padding: 18rpx; background: #fff8ed; }
+.preset-title { margin-bottom: 12rpx; color: #987049; font-size: 22rpx; }
+.preset-list { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.preset { border: 1rpx solid #f0ddc5; border-radius: 999rpx; padding: 9rpx 16rpx; color: #8b5c28; background: #fff; font-size: 24rpx; }
+.preset:active { background: #ffe8c2; }
+.answer-row radio { transform: scale(.75); }
+.analysis-input { border-top: 1rpx solid #f0e4d6; border-bottom: 0; }
+.save { margin: 22rpx 0 0; border-radius: 16rpx; color: #fff; background: #c96d32; box-shadow: 0 14rpx 26rpx rgba(201, 109, 50, .2); font-size: 30rpx; }
+.save:active { background: #ad5620; transform: scale(.98); }

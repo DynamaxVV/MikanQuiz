@@ -19,9 +19,7 @@
             <image class="question-image" src="{{item.imageUrl}}" mode="aspectFit" />
             <view>点击查看原图</view>
           </view>
-          <view wx:for="{{item.optionItems}}" wx:for-item="option" wx:key="key" class="option {{item.answer === option.key ? 'answer' : ''}} {{item.selected === option.key && item.answer !== option.key ? 'wrong-selected' : ''}}">
-            <text>{{option.key}}</text>{{option.text}}
-          </view>
+          <view wx:for="{{item.optionGroups}}" wx:for-item="group" wx:key="id" class="option-group"><view class="group-title">{{group.name}}</view><view wx:for="{{group.options}}" wx:for-item="option" wx:key="id" class="option {{item.answer === option.id ? 'answer' : ''}} {{item.selected === option.id && item.answer !== option.id ? 'wrong-selected' : ''}}">{{option.name}}</view></view>
           <view class="answer-summary">
             <view><text>你的答案</text><text class="wrong-answer">{{item.selected || '未作答'}}</text></view>
             <view><text>正确答案</text><text class="correct-answer">{{item.answer}}</text></view>
@@ -38,7 +36,7 @@
           <view class="question-number">第 {{currentQuestion.number}} 题 <text wx:for="{{currentQuestion.stars}}" wx:key="*this">★</text></view>
           <view class="question-text">{{currentQuestion.text}}</view>
           <view wx:if="{{currentQuestion.imageUrl}}" class="image-wrap" bind:tap="previewImage"><image class="question-image" src="{{currentQuestion.imageUrl}}" mode="aspectFit"/><view>点击查看原图</view></view>
-          <view wx:for="{{currentQuestion.optionItems}}" wx:key="key" class="option {{currentQuestion.selected===item.key?'selected':''}}" data-id="{{currentQuestion._id}}" data-value="{{item.key}}" bind:tap="chooseAnswer"><text>{{item.key}}</text>{{item.text}}</view>
+          <view wx:for="{{currentQuestion.optionGroups}}" wx:for-item="group" wx:key="id" class="option-group"><view class="group-title">{{group.name}}</view><view wx:for="{{group.options}}" wx:for-item="option" wx:key="id" class="option {{currentQuestion.selected===option.id?'selected':''}}" data-id="{{currentQuestion._id}}" data-value="{{option.id}}" bind:tap="chooseAnswer">{{option.name}}</view></view>
         </view>
         <view class="navigation"><button bind:tap="previous" disabled="{{currentIndex===0}}">上一题</button><button wx:if="{{currentIndex < questions.length - 1}}" bind:tap="next">下一题</button><button wx:else class="submit" loading="{{submitting}}" bind:tap="submit">提交</button></view>
       </block>

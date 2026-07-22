@@ -19,12 +19,20 @@ def configure_two_question_quiz(client: TestClient) -> tuple[dict[str, str], lis
     strategy = {
         "question_count": 2,
         "modes": {
-            "beginner": [100, 0, 0, 0, 0],
-            "proficient": [100, 0, 0, 0, 0],
-            "challenge": [100, 0, 0, 0, 0],
+            "beginner": [100, 0, 0],
+            "proficient": [100, 0, 0],
+            "challenge": [100, 0, 0],
         },
     }
     assert client.put("/api/v1/admin/settings/strategy", json=strategy, headers=headers).status_code == 200
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    other = next(group for group in catalog if group["name"] == "其他")
+    other["options"] = [
+        {"name": name, "minimum_difficulty": 1, "sort_order": index}
+        for index, name in enumerate(("甲", "乙", "丙", "丁"))
+    ]
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    option_ids = {item["name"]: item["id"] for group in catalog for item in group["options"]}
     questions = []
     for index, answer in enumerate(("B", "D"), start=1):
         response = client.post(
@@ -34,8 +42,7 @@ def configure_two_question_quiz(client: TestClient) -> tuple[dict[str, str], lis
                 "text": f"题目 {index}",
                 "image_url": "https://pan.yurucamp.cn/image.png",
                 "difficulty": 1,
-                "options": ["甲", "乙", "丙", "丁"],
-                "answer": answer,
+                    "correct_option_id": option_ids[{"B": "乙", "D": "丁"}[answer]],
                 "explanation": f"旧解析 {index}",
             },
         )
@@ -60,11 +67,11 @@ def test_public_attempt_boundary_idempotency_and_snapshot(client: TestClient) ->
     resumed = client.get("/api/v1/quiz/attempts/current", headers=attempt_headers)
     assert resumed.status_code == 200
     assert {"answer", "explanation"}.isdisjoint(resumed.json()["questions"][0])
-    answers = {str(question["id"]): question["answer"] for question in questions}
+    answers = {str(question["id"]): question["correct_option_id"] for question in questions}
     invalid = client.post(
         "/api/v1/quiz/attempts/submit",
         headers=attempt_headers,
-        json={"display_name": "小明", "answers": {**answers, "999": "A"}},
+        json={"display_name": "小明", "answers": {**answers, "999": 1}},
     )
     assert invalid.status_code == 422
     assert invalid.json()["error"]["code"] == "INVALID_ANSWERS"
@@ -93,7 +100,7 @@ def test_public_attempt_boundary_idempotency_and_snapshot(client: TestClient) ->
     changed = client.patch(
         f"/api/v1/admin/questions/{questions[0]['id']}",
         headers=headers,
-        json={"answer": "A", "explanation": "新解析"},
+        json={"explanation": "新解析"},
     )
     assert changed.status_code == 200
     historical = client.get(
@@ -105,9 +112,9 @@ def test_public_attempt_boundary_idempotency_and_snapshot(client: TestClient) ->
     }
     snapshot = detail_by_question[questions[0]["id"]]
     assert snapshot["explanation"] == "旧解析 1"
-    assert snapshot["correct_answer"] == "B"
+    assert snapshot["correct_option_id"] == questions[0]["correct_option_id"]
     assert snapshot["image_url"].endswith("image.png")
-    assert snapshot["options"] == ["甲", "乙", "丙", "丁"]
+    assert snapshot["option_groups"]
 
 
 def test_expired_attempt_cannot_resume_or_submit(
@@ -123,7 +130,7 @@ def test_expired_attempt_cannot_resume_or_submit(
     attempt_headers = {"X-Quiz-Attempt": attempt["attempt_token"]}
     resumed = client.get("/api/v1/quiz/attempts/current", headers=attempt_headers)
     assert (resumed.status_code, resumed.json()["error"]["code"]) == (410, "ATTEMPT_EXPIRED")
-    answers = {str(question["id"]): question["answer"] for question in questions}
+    answers = {str(question["id"]): question["correct_option_id"] for question in questions}
     submitted = client.post(
         "/api/v1/quiz/attempts/submit",
         headers=attempt_headers,
@@ -248,21 +255,61 @@ def test_font_references_are_public_and_admin_managed(client: TestClient) -> Non
 def test_admin_questions_accept_multiple_difficulty_filters(client: TestClient) -> None:
     """Keep multi-select difficulty tags backed by one filtered server query."""
     headers = admin_headers(client)
-    for difficulty in (1, 3, 5):
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    other = next(group for group in catalog if group["name"] == "其他")
+    other["options"] = [{"name": "甲", "minimum_difficulty": 1, "sort_order": 0}]
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    option_id = next(item["id"] for group in catalog for item in group["options"] if item["name"] == "甲")
+    missing_image = client.post(
+        "/api/v1/admin/questions",
+        headers=headers,
+        json={"text": "缺少题图", "difficulty": 1, "correct_option_id": option_id, "explanation": "解析"},
+    )
+    assert missing_image.status_code == 422
+    for difficulty in (1, 2, 3):
         response = client.post(
             "/api/v1/admin/questions",
             headers=headers,
             json={
                 "text": f"{difficulty} 星题目",
+                "image_url": "https://images.example.test/question.png",
                 "difficulty": difficulty,
-                "options": ["甲", "乙", "丙", "丁"],
-                "answer": "A",
+                "correct_option_id": option_id,
                 "explanation": "解析",
             },
         )
         assert response.status_code == 201, response.text
     listed = client.get(
-        "/api/v1/admin/questions?difficulty=1&difficulty=5", headers=headers
+        "/api/v1/admin/questions?difficulty=1&difficulty=3", headers=headers
     )
     assert listed.status_code == 200, listed.text
-    assert {item["difficulty"] for item in listed.json()["items"]} == {1, 5}
+    assert {item["difficulty"] for item in listed.json()["items"]} == {1, 3}
+
+
+def test_deleting_font_marks_question_for_repair(client: TestClient) -> None:
+    """A removed correct font leaves the question editable and blocks new attempts."""
+    headers, questions = configure_two_question_quiz(client)
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    for group in catalog:
+        group["options"] = [option for option in group["options"] if option["id"] != questions[0]["correct_option_id"]]
+    assert client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).status_code == 200
+    question = client.get(f"/api/v1/admin/questions/{questions[0]['id']}", headers=headers)
+    assert question.status_code == 200
+    assert question.json()["configuration_error"] == "正确字体已被删除，请重新选择后保存题目"
+    attempt = client.post("/api/v1/quiz/attempts", json={"mode": "beginner"})
+    assert (attempt.status_code, attempt.json()["error"]["code"]) == (409, "QUESTION_FONT_MISSING")
+
+
+def test_catalog_rejects_deleting_a_nonempty_group(client: TestClient) -> None:
+    """Keep group deletion safe even when a client bypasses the management page."""
+    headers = admin_headers(client)
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    other = next(group for group in catalog if group["name"] == "其他")
+    other["options"] = [{"name": "甲", "minimum_difficulty": 1, "sort_order": 0}]
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    response = client.put(
+        "/api/v1/admin/option-groups",
+        json={"groups": [group for group in catalog if group["id"] != other["id"]]},
+        headers=headers,
+    )
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "OPTION_GROUP_NOT_EMPTY")
