@@ -1,0 +1,20 @@
+{
+  "name": "砂糖的秘密小课堂",
+  "short_name": "砂糖小课堂",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff9f0",
+  "theme_color": "#fff9f0",
+  "icons": [
+    {
+      "src": "/mikanquiz-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/mikanquiz-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
