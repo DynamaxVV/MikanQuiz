@@ -4,7 +4,7 @@ const router = createRouter({
   history: createWebHistory(),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
-    { path: '/', component: () => import('@/pages/HomePage.vue'), meta: { title: '砂糖字形课堂' } },
+    { path: '/', component: () => import('@/pages/HomePage.vue'), meta: { title: '砂糖的秘密小课堂' } },
     { path: '/levels', component: () => import('@/pages/LevelsPage.vue'), meta: { title: '选择难度' } },
     { path: '/quiz/:attempt', component: () => import('@/pages/QuizPage.vue'), meta: { title: '字形练习' } },
     { path: '/result/:attempt', component: () => import('@/pages/ResultPage.vue'), meta: { title: '答题结果' } },
@@ -22,6 +22,6 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => { document.title = `${to.meta.title ?? '砂糖字形课堂'} · 砂糖字形课堂`; });
+router.beforeEach((to) => { document.title = `${to.meta.title ?? '砂糖的秘密小课堂'} · 砂糖的秘密小课堂`; });
 
 export default router;
