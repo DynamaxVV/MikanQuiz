@@ -1,0 +1,7 @@
+# Production dependencies. Versions are intentionally pinned for reproducible venv deploys.
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+SQLAlchemy==2.0.43
+alembic==1.16.5
+pwdlib[argon2]==0.2.1
+python-multipart==0.0.20

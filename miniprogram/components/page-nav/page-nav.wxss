@@ -1,0 +1,1 @@
+.nav{align-items:center;background:#ff9800;box-sizing:content-box;color:#fff;display:flex;height:88rpx;justify-content:center;position:relative}.actions{align-items:center;display:flex;left:18rpx;position:absolute}.action{font-size:24rpx;padding:18rpx 10rpx}.home{border-left:1rpx solid rgba(255,255,255,.35);margin-left:4rpx}.title{font-size:30rpx;font-weight:700}

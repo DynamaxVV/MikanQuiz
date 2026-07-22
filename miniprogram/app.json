@@ -1,0 +1,24 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/admin-login/admin-login",
+    "pages/level/level",
+    "pages/quiz/quiz",
+    "pages/admin/admin",
+    "pages/admin-questions/admin-questions",
+    "pages/admin-question-form/admin-question-form",
+    "pages/admin-question-detail/admin-question-detail",
+    "pages/admin-settings/admin-settings"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ff9800",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "砂糖的秘密小课堂",
+    "backgroundColor": "#fff9f0",
+    "backgroundTextStyle": "light",
+    "enablePullDownRefresh": true
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

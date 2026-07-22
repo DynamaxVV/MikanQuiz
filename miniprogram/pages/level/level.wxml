@@ -1,0 +1,11 @@
+<view class="page">
+  <view class="eyebrow">选择今日练习</view>
+  <view class="title">从哪一档开始？</view>
+  <view class="subtitle">每种难度都会按当前策略，随机组合 {{questionCount}} 道题。</view>
+  <view wx:if="{{loading}}" class="loading">正在准备题目…</view>
+  <view wx:for="{{levels}}" wx:key="key" class="level-card" data-mode="{{item.key}}" bind:tap="selectLevel">
+    <view class="level-icon">{{item.icon}}</view>
+    <view class="level-content"><view class="level-title">{{item.title}}</view><view class="level-subtitle">{{item.subtitle}}</view></view>
+    <text class="arrow">→</text>
+  </view>
+</view>

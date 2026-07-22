@@ -1,0 +1,23 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载…</view>
+  <block wx:else>
+    <view class="section">练习策略</view>
+    <view class="card">
+      <view class="count">每次题目数量 <input type="number" value="{{settings.questionCount}}" bindinput="updateCount" /> 题</view>
+      <view wx:for="{{strategyRows}}" wx:key="key" class="mode"><view>{{item.title}}</view><view class="weights"><view wx:for="{{item.weights}}" wx:for-item="weight" wx:key="star"><text>{{weight.star}}★</text><input type="number" value="{{weight.value}}" data-mode="{{weight.mode}}" data-index="{{weight.index}}" bindinput="updateWeight" /></view></view></view>
+      <button class="save" loading="{{savingStrategy}}" bind:tap="saveStrategy">保存出题策略</button>
+    </view>
+    <view class="section">字体快捷输入</view>
+    <view class="card"><view class="help">每行一个字体名称；新增题目时可一键填入当前选项。</view><textarea value="{{fontText}}" placeholder="例如：宋体&#10;黑体" bindinput="updateFonts" auto-height /><button class="save" loading="{{savingFonts}}" bind:tap="saveFonts">保存字体快捷项</button></view>
+    <view class="section">提交记录</view>
+    <view class="card">
+      <view wx:if="{{!submissionGroups.length}}" class="help">暂无提交记录</view>
+      <view wx:for="{{submissionGroups}}" wx:key="name" class="submission-group">
+        <view class="group-title"><text>{{item.name}}</text><text>{{item.items.length}} 次提交</text></view>
+        <view wx:for="{{item.expanded ? item.items : item.previewItems}}" wx:for-item="submission" wx:key="_id" class="submission"><view>答对 {{submission.correctCount}} / {{submission.total}} 题</view><text class="submission-score">{{submission.score}}分</text></view>
+        <view wx:if="{{item.remainingCount}}" class="fold" data-index="{{index}}" bind:tap="toggleGroup">{{item.expanded ? '收起记录' : '展开其余 ' + item.remainingCount + ' 条记录'}}</view>
+      </view>
+      <button wx:if="{{submissionItems.length < submissionsTotal}}" class="more" loading="{{loadingMore}}" bind:tap="loadMoreSubmissions">加载更多记录</button>
+    </view>
+  </block>
+</view>

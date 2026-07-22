@@ -1,0 +1,16 @@
+<view class="page">
+  <view wx:if="{{!checked}}" class="state">正在打开管理后台…</view>
+  <view wx:elif="{{!authorized}}" class="state">管理员登录已失效，请返回首页重新登录。</view>
+  <block wx:else>
+    <view class="eyebrow">ADMIN CONSOLE</view>
+    <view class="title">题库管理</view>
+    <view class="subtitle">添加、查看和维护每一道字形识别题。</view>
+    <view class="primary-card" bind:tap="goQuestions">
+      <view><view class="primary-title">管理题库</view><view class="primary-desc">查看已有题目与详细内容</view></view><text>→</text>
+    </view>
+    <view class="quick-row"><view class="quick-card" bind:tap="goAddQuestion"><text class="quick-icon">＋</text><view><view>新增题目</view><text>录入一道新题</text></view></view></view>
+    <view class="section-label">更多管理</view>
+    <view class="menu-card" bind:tap="goSettings"><view><view class="menu-title">练习策略与字体库</view><view class="menu-desc">难度配比、快捷字体选项、提交记录</view></view><text class="arrow">›</text></view>
+    <view class="logout" bind:tap="logout">退出管理员登录</view>
+  </block>
+</view>

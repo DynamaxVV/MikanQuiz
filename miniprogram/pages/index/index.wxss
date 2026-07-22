@@ -1,0 +1,20 @@
+page { background: #fff9f0; color: #332718; }
+.page { box-sizing: border-box; min-height: 100vh; overflow: hidden; padding: 112rpx 44rpx 80rpx; }
+.hero { margin-bottom: 88rpx; position: relative; }
+.sun { background: #fff0d2; border-radius: 50%; height: 260rpx; position: absolute; right: -118rpx; top: -108rpx; width: 260rpx; }
+.eyebrow { color: #d97a00; font-size: 24rpx; font-weight: 700; letter-spacing: 4rpx; position: relative; }
+.hero-title-image { display: block; height: auto; margin-top: 20rpx; position: relative; width: 662rpx; z-index: 1; }
+.subtitle { color: #816e59; font-size: 29rpx; line-height: 1.75; margin-top: 28rpx; max-width: 550rpx; position: relative; }
+.card { align-items: center; background: #fff; border: 1rpx solid #f2e4d1; border-radius: 30rpx; box-shadow: 0 18rpx 42rpx rgba(116, 72, 20, 0.08); display: flex; justify-content: space-between; margin-bottom: 24rpx; padding: 40rpx 34rpx; transition: transform 100ms ease-out, box-shadow 100ms ease-out; }
+.card:active { box-shadow: 0 8rpx 20rpx rgba(116, 72, 20, 0.1); transform: scale(0.98); }
+.primary { background: #c96d32; border-color: #c96d32; box-shadow: 0 18rpx 36rpx rgba(201, 109, 50, 0.24); color: #fff; }
+.card-title { font-size: 36rpx; font-weight: 700; letter-spacing: -1rpx; }
+.card-desc { color: #967f66; font-size: 26rpx; margin-top: 10rpx; }
+.primary .card-desc { color: rgba(255, 255, 255, 0.84); }
+.arrow { font-size: 44rpx; font-weight: 300; }
+.hint { color: #a08d76; font-size: 24rpx; line-height: 1.65; margin: 60rpx auto 0; text-align: center; width: 80%; }
+.admin-entry { color: #bd8a53; font-size: 23rpx; margin-top: 28rpx; padding: 18rpx; text-align: center; }
+.admin-entry:active { color: #ff9800; }
+.name-entry { color: #9a744b; font-size: 24rpx; position: absolute; right: 34rpx; top: 34rpx; z-index: 2; }
+.name-mask { align-items: center; background: rgba(45, 32, 18, .3); display: flex; height: 100vh; justify-content: center; left: 0; position: fixed; top: 0; width: 100vw; z-index: 10; }
+.name-dialog { background: #fff; border-radius: 24rpx; box-sizing: border-box; padding: 34rpx; width: 600rpx; }.dialog-title { font-size: 34rpx; font-weight: 700; }.name-dialog input { border-bottom: 2rpx solid #f0dfcc; font-size: 30rpx; margin-top: 28rpx; padding: 16rpx 0; }.dialog-actions { display: flex; font-size: 28rpx; justify-content: flex-end; margin-top: 30rpx; }.dialog-actions text { color: #917b63; margin-left: 44rpx; }.dialog-actions .confirm { color: #c96d32; font-weight: 700; }

@@ -1,0 +1,26 @@
+# Operating-system and editor files
+.DS_Store
+.vscode/
+
+# Local agent/runtime artifacts
+.omx/
+
+# Secrets and local configuration
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python runtime and test artifacts
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+
+# Node.js build artifacts
+**/node_modules/
+**/dist/
+
+# Local databases and generated data
+**/var/
+**/*.db
+**/*.db-*

@@ -1,0 +1,155 @@
+"""Persistent SQLAlchemy models for the quiz system."""
+
+from datetime import datetime, timezone
+
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Text, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import JSON
+
+
+def utc_now() -> datetime:
+    """Return an aware UTC timestamp suitable for model defaults."""
+    return datetime.now(timezone.utc)
+
+
+def as_utc(value: datetime) -> datetime:
+    """Normalize SQLite's naive timestamp reads to the API's UTC contract."""
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+class Base(DeclarativeBase):
+    """Base class shared by all database models."""
+
+
+class Question(Base):
+    """A fixed-four-option question and its current correct answer."""
+
+    __tablename__ = "questions"
+    __table_args__ = (
+        CheckConstraint("difficulty BETWEEN 1 AND 5", name="ck_question_difficulty"),
+        CheckConstraint("answer IN ('A', 'B', 'C', 'D')", name="ck_question_answer"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    legacy_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    text: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
+    option_a: Mapped[str] = mapped_column(String(500), nullable=False)
+    option_b: Mapped[str] = mapped_column(String(500), nullable=False)
+    option_c: Mapped[str] = mapped_column(String(500), nullable=False)
+    option_d: Mapped[str] = mapped_column(String(500), nullable=False)
+    answer: Mapped[str] = mapped_column(String(1), nullable=False)
+    explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class QuizSettings(Base):
+    """The single configurable draw strategy and font preset list."""
+
+    __tablename__ = "quiz_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_settings_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    question_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    modes: Mapped[dict[str, list[int]]] = mapped_column(JSON, nullable=False)
+    font_presets: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class FontReference(Base):
+    """An administrator-maintained public font comparison image."""
+
+    __tablename__ = "font_references"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    note: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class Admin(Base):
+    """An account managed exclusively by the server-side CLI."""
+
+    __tablename__ = "admins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class AdminSession(Base):
+    """A revocable, hash-only administrator session token."""
+
+    __tablename__ = "admin_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class QuizAttempt(Base):
+    """A 24-hour server-bound collection of selected question IDs."""
+
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    question_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Submission(Base):
+    """The immutable score belonging to one completed quiz attempt."""
+
+    __tablename__ = "submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id"), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    correct_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (UniqueConstraint("attempt_id", name="uq_submission_attempt"),)
+
+
+class SubmissionAnswer(Base):
+    """An answer snapshot that survives later question edits or deletion."""
+
+    __tablename__ = "submission_answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    submission_id: Mapped[int] = mapped_column(
+        ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questions.id", ondelete="SET NULL"), nullable=True
+    )
+    question_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    options: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    selected: Mapped[str] = mapped_column(String(1), nullable=False)
+    correct_answer: Mapped[str] = mapped_column(String(1), nullable=False)
+    explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)

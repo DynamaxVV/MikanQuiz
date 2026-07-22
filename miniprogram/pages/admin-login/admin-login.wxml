@@ -1,0 +1,7 @@
+<view class="page">
+  <view class="eyebrow">ADMIN ACCESS</view>
+  <view class="title">管理员登录</view>
+  <view class="subtitle">使用由服务器运维维护的管理员账号登录。</view>
+  <view class="form-card"><input placeholder="管理员账号" value="{{username}}" bindinput="updateUsername" /><input placeholder="管理员密码" password value="{{password}}" bindinput="updatePassword" /></view>
+  <button class="login-button" loading="{{loading}}" bind:tap="login">登录后台</button>
+</view>

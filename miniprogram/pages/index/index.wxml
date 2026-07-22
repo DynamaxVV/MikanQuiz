@@ -1,0 +1,15 @@
+<view class="page">
+  <view class="name-entry" bind:tap="openName">{{displayName ? displayName : '设置名字'}}</view>
+  <view class="hero">
+    <view class="sun"></view>
+    <text class="eyebrow">砂糖的秘密小课堂</text>
+    <image class="hero-title-image" src="/images/hero-title-hanzipen.png" mode="widthFix" />
+    <view class="subtitle">  观察图片，选择最合适的中文字体~</view>
+  </view>
+  <view class="card primary" bind:tap="goLevel">
+    <view><view class="card-title">开始识字挑战</view><view class="card-desc">选择适合你的题目难度</view></view><text class="arrow">→</text>
+  </view>
+  <view class="hint">提交后会自动评分，并告诉你每一题的思路。</view>
+  <view class="admin-entry" bind:tap="goAdmin">{{isAdmin ? '题库管理' : '管理员登录'}}</view>
+  <view wx:if="{{editingName}}" class="name-mask"><view class="name-dialog"><view class="dialog-title">设置你的名字</view><input focus maxlength="20" placeholder="例如：小砂糖" value="{{draftName}}" bindinput="updateName" /><view class="dialog-actions"><text bind:tap="closeName">取消</text><text class="confirm" bind:tap="saveName">保存</text></view></view></view>
+</view>

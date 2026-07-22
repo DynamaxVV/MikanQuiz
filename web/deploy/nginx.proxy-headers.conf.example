@@ -1,0 +1,8 @@
+# This snippet deliberately overrides any client-supplied X-Forwarded-For.
+# $remote_addr is either the direct peer or the trusted real_ip-derived client.
+# Never replace $remote_addr with $proxy_add_x_forwarded_for here.
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $remote_addr;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;

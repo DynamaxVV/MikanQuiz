@@ -1,0 +1,6 @@
+{
+  "name": "quiz",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": { "wx-server-sdk": "latest" }
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Quiz SQLite online backup and OSS replication
+After=quiz-api.service
+
+[Service]
+Type=oneshot
+User=quiz
+Group=quiz
+EnvironmentFile=/etc/quiz/quiz-backup.env
+ExecStart=/srv/quiz/venv/bin/python /srv/quiz/current/scripts/backup_sqlite.py --database /srv/quiz/data/quiz.db --destination /srv/quiz/data/backups --oss-target ${QUIZ_OSS_TARGET}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/quiz/data

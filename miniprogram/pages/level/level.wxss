@@ -1,0 +1,15 @@
+page { background: #fff9f0; color: #332718; }
+.page { padding: 74rpx 30rpx; }
+.eyebrow { color: #d97a00; font-size: 24rpx; font-weight: 700; letter-spacing: 3rpx; }
+.title { font-size: 52rpx; font-weight: 700; letter-spacing: -2rpx; margin-top: 20rpx; }
+.subtitle { color: #836f5a; font-size: 27rpx; line-height: 1.7; margin: 22rpx 0 46rpx; }
+.loading { color: #9b8873; padding: 60rpx 0; text-align: center; }
+.level-card { align-items: center; background: #fff; border: 1rpx solid #f3e5d3; border-radius: 26rpx; box-shadow: 0 12rpx 30rpx rgba(116, 72, 20, 0.07); display: flex; margin-bottom: 20rpx; padding: 30rpx 24rpx; transition: transform 100ms ease-out; }
+.level-card:active { transform: scale(0.98); }
+.level-icon { align-items: center; background: #fff0d8; border-radius: 18rpx; color: #e28100; display: flex; font-size: 31rpx; font-weight: 700; height: 84rpx; justify-content: center; margin-right: 22rpx; width: 84rpx; }
+.level-content { flex: 1; }
+.level-title { font-size: 34rpx; font-weight: 700; }
+.level-subtitle { color: #927d67; font-size: 24rpx; margin-top: 8rpx; }
+.weight-row { margin-top: 14rpx; }
+.weight { color: #b28249; font-size: 20rpx; margin-right: 12rpx; }
+.arrow { color: #d98614; font-size: 40rpx; }

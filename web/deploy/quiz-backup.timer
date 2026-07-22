@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Quiz SQLite backup every day
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

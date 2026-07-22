@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "skyline-components": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-components/SKILL.md",
+      "computedHash": "822e3f1b986922f55c46b1ead41a1088c21464c398253eb8531859f2f1874e96"
+    },
+    "skyline-config": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-config/SKILL.md",
+      "computedHash": "9e52ad2d0d10e5ffc0fff117a6adc7e829885297dd92e7d9d4599cf0bfb45a8e"
+    },
+    "skyline-overview": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-overview/SKILL.md",
+      "computedHash": "94b88b7bc42e080f1d1e2d22fa5fb811beef837804d8cfbf342162c09e738773"
+    },
+    "skyline-route": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-route/SKILL.md",
+      "computedHash": "8eb704469231b144bb8607eab37d4ec7d6d4c04d72af9d486eb0dc2c6f59ae90"
+    },
+    "skyline-scroll-api": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-scroll-api/SKILL.md",
+      "computedHash": "8a794fe67e6b7ce7e8bce6dc61434e280c0e816ab53451f4067fe57b3f0969a3"
+    },
+    "skyline-worklet": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-worklet/SKILL.md",
+      "computedHash": "0ee75be4c721756d0e9d4ff9f8a693332938352c4e5678bde8b4d80f7a8ce9fd"
+    },
+    "skyline-wxss": {
+      "source": "wechat-miniprogram/skyline-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skyline-wxss/SKILL.md",
+      "computedHash": "febf66a9f71c3a9f3a9f5708aff568a3769be3df9b8ebc1af7affa2156ec6f6c"
+    }
+  }
+}

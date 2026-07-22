@@ -1,0 +1,67 @@
+# This is a server-level site file for sites-available/quiz.conf.
+# First install nginx.http.conf.example inside nginx's http {} context, and install
+# nginx.proxy-headers.conf.example as /etc/nginx/snippets/quiz-proxy-headers.conf.
+# Replace the domain, trusted proxy range and deployment paths before use.
+
+server {
+    listen 443 ssl http2;
+    server_name quiz.example.com;
+
+    # ssl_certificate /etc/letsencrypt/live/quiz.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/quiz.example.com/privkey.pem;
+    # set_real_ip_from 203.0.113.0/24; # The only known upstream proxy range.
+    # real_ip_header X-Forwarded-For;
+    # real_ip_recursive on;
+
+    root /srv/quiz/current/frontend/dist;
+    index index.html;
+    client_max_body_size 256k;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' https://pan.yurucamp.cn data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; frame-ancestors 'none'" always;
+
+    location = /api/health {
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/quiz/attempts {
+        limit_req zone=quiz_attempts burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/quiz/attempts/current {
+        limit_req zone=quiz_attempts burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/quiz/attempts/submit {
+        limit_req zone=quiz_submits burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location ~ ^/api/v1/admin/(web|miniprogram)/login$ {
+        limit_req zone=quiz_logins burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/snippets/quiz-proxy-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "check": "node scripts/check-api-client.js"
+  },
+  "dependencies": {}
+}

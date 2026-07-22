@@ -1,0 +1,10 @@
+page { background: #fff9f0; color: #332718; }
+.page { padding: 100rpx 48rpx; }
+.eyebrow { color: #d97a00; font-size: 23rpx; font-weight: 700; letter-spacing: 4rpx; }
+.title { font-size: 52rpx; font-weight: 700; letter-spacing: -2rpx; margin-top: 20rpx; }
+.subtitle { color: #8c7863; font-size: 28rpx; line-height: 1.7; margin: 20rpx 0 48rpx; }
+.info-card, .form-card { background: #fff; border: 1rpx solid #f2e3d0; border-radius: 20rpx; color: #765f49; font-size: 27rpx; line-height: 1.65; margin-top: 24rpx; padding: 28rpx; }
+.form-card input { border-bottom: 1rpx solid #f0e3d6; font-size: 30rpx; height: 90rpx; }
+.form-card input:last-child { border-bottom: 0; }
+.login-button { background: #c96d32; border-radius: 18rpx; box-shadow: 0 16rpx 28rpx rgba(201, 109, 50, 0.22); color: #fff; font-size: 32rpx; margin-top: 32rpx; }
+.login-button:active { background: #ad5620; transform: scale(0.98); }

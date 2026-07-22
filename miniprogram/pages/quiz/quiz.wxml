@@ -1,0 +1,47 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在准备题目…</view>
+  <view wx:elif="{{questions.length === 0}}" class="state">题库暂无题目，请管理员先添加。</view>
+  <block wx:else>
+    <block wx:if="{{result}}">
+      <view class="result-card">
+        <view>本次得分</view>
+        <view class="score">{{result.score}}<text>分</text></view>
+        <view>{{modeTitle}} · 答对 {{result.correctCount}} / {{result.total}} 题</view>
+        <view wx:if="{{displayName}}" class="result-name">{{displayName}} 的练习结果</view>
+        <button bind:tap="retry">再答一次</button>
+      </view>
+      <view wx:if="{{result.wrongDetails.length}}" class="review-section">
+        <view class="review-heading">错题解析</view>
+        <view wx:for="{{result.wrongDetails}}" wx:key="_id" class="review-card">
+          <view class="question-number">第 {{item.number}} 题 <text wx:for="{{item.stars}}" wx:key="*this">★</text></view>
+          <view class="question-text">{{item.text}}</view>
+          <view wx:if="{{item.imageUrl}}" class="image-wrap" data-url="{{item.imageUrl}}" bind:tap="previewReviewImage">
+            <image class="question-image" src="{{item.imageUrl}}" mode="aspectFit" />
+            <view>点击查看原图</view>
+          </view>
+          <view wx:for="{{item.optionItems}}" wx:for-item="option" wx:key="key" class="option {{item.answer === option.key ? 'answer' : ''}} {{item.selected === option.key && item.answer !== option.key ? 'wrong-selected' : ''}}">
+            <text>{{option.key}}</text>{{option.text}}
+          </view>
+          <view class="answer-summary">
+            <view><text>你的答案</text><text class="wrong-answer">{{item.selected || '未作答'}}</text></view>
+            <view><text>正确答案</text><text class="correct-answer">{{item.answer}}</text></view>
+          </view>
+          <view class="analysis"><view>解析</view>{{item.selectedExplanation}}</view>
+        </view>
+      </view>
+      <view wx:else class="all-correct">太棒了，本次没有错题。</view>
+    </block>
+    <block wx:else>
+      <view class="mode-label">{{modeTitle}} · 第 {{currentIndex + 1}} / {{questions.length}} 题</view>
+      <block wx:if="{{currentQuestion}}">
+        <view class="question-card">
+          <view class="question-number">第 {{currentQuestion.number}} 题 <text wx:for="{{currentQuestion.stars}}" wx:key="*this">★</text></view>
+          <view class="question-text">{{currentQuestion.text}}</view>
+          <view wx:if="{{currentQuestion.imageUrl}}" class="image-wrap" bind:tap="previewImage"><image class="question-image" src="{{currentQuestion.imageUrl}}" mode="aspectFit"/><view>点击查看原图</view></view>
+          <view wx:for="{{currentQuestion.optionItems}}" wx:key="key" class="option {{currentQuestion.selected===item.key?'selected':''}}" data-id="{{currentQuestion._id}}" data-value="{{item.key}}" bind:tap="chooseAnswer"><text>{{item.key}}</text>{{item.text}}</view>
+        </view>
+        <view class="navigation"><button bind:tap="previous" disabled="{{currentIndex===0}}">上一题</button><button wx:if="{{currentIndex < questions.length - 1}}" bind:tap="next">下一题</button><button wx:else class="submit" loading="{{submitting}}" bind:tap="submit">提交</button></view>
+      </block>
+    </block>
+  </block>
+</view>

@@ -1,0 +1,6 @@
+# Install this file where Ubuntu Nginx includes it from its http {} block, for
+# example /etc/nginx/conf.d/quiz-rate-limits.conf. Do not place it in
+# sites-enabled: limit_req_zone is valid in http, not server, context.
+limit_req_zone $binary_remote_addr zone=quiz_attempts:10m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=quiz_submits:10m rate=20r/m;
+limit_req_zone $binary_remote_addr zone=quiz_logins:10m rate=5r/m;
