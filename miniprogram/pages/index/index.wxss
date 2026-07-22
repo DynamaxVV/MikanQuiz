@@ -13,8 +13,9 @@ page { background: #fff9f0; color: #332718; }
 .primary .card-desc { color: rgba(255, 255, 255, 0.84); }
 .arrow { font-size: 44rpx; font-weight: 300; }
 .hint { color: #a08d76; font-size: 24rpx; line-height: 1.65; margin: 60rpx auto 0; text-align: center; width: 80%; }
-.admin-entry { color: #bd8a53; font-size: 23rpx; margin-top: 28rpx; padding: 18rpx; text-align: center; }
+.top-actions { align-items: center; display: flex; gap: 18rpx; position: absolute; right: 34rpx; top: 28rpx; z-index: 2; }
+.admin-entry { color: #bd8a53; font-size: 23rpx; padding: 18rpx 0; }
 .admin-entry:active { color: #ff9800; }
-.name-entry { color: #9a744b; font-size: 24rpx; position: absolute; right: 34rpx; top: 34rpx; z-index: 2; }
+.name-entry { color: #9a744b; font-size: 24rpx; padding: 18rpx 0; }
 .name-mask { align-items: center; background: rgba(45, 32, 18, .3); display: flex; height: 100vh; justify-content: center; left: 0; position: fixed; top: 0; width: 100vw; z-index: 10; }
 .name-dialog { background: #fff; border-radius: 24rpx; box-sizing: border-box; padding: 34rpx; width: 600rpx; }.dialog-title { font-size: 34rpx; font-weight: 700; }.name-dialog input { border-bottom: 2rpx solid #f0dfcc; font-size: 30rpx; margin-top: 28rpx; padding: 16rpx 0; }.dialog-actions { display: flex; font-size: 28rpx; justify-content: flex-end; margin-top: 30rpx; }.dialog-actions text { color: #917b63; margin-left: 44rpx; }.dialog-actions .confirm { color: #c96d32; font-weight: 700; }

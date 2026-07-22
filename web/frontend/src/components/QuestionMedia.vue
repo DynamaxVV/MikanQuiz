@@ -25,8 +25,8 @@ function retry(): void { failed.value = false; }
 
 <style scoped>
 .media { overflow: hidden; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface-warm); }
-.image-button { display: grid; width: 100%; min-height: min(48vh, 460px); padding: 16px; place-items: center; border: 0; background: transparent; }
-img { display: block; max-height: min(56vh, 560px); object-fit: contain; }
+.image-button { display: grid; width: 100%; height: min(48vh, 460px); padding: 16px; place-items: center; border: 0; background: transparent; box-sizing: border-box; }
+img { display: block; width: 80%; height: 80%; max-width: 100%; max-height: 100%; object-fit: contain; }
 .media-footer { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 10px; color: var(--color-text-muted); font-size: 13px; background: rgba(255, 255, 255, .66); }
 .media-footer button { border: 0; color: var(--color-action); background: transparent; font-weight: 650; }
 .image-error { max-width: 280px; color: var(--color-danger); line-height: 1.6; text-align: center; }

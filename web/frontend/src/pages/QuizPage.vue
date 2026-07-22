@@ -141,8 +141,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .quiz-layout { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); gap: 28px; padding: 28px 0 64px; }
 .question-panel { padding: 28px; }
 .question-panel h1 { margin: 0 0 24px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.3; letter-spacing: -.015em; }
-.quiz-media :deep(.image-button) { min-height: min(60vh, 620px); }
-.quiz-media :deep(img) { max-height: min(68vh, 700px); }
+.quiz-media :deep(.image-button) { height: min(60vh, 620px); }
 .answer-panel { position: sticky; top: 18px; align-self: start; padding: 8px 0; }
 .answers { display: grid; gap: 12px; }
 .question-navigation { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
