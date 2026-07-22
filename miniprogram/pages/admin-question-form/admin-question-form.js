@@ -62,7 +62,19 @@ Page({
       if (this.questionId) await api.updateAdminQuestion(this.adminToken, this.questionId, question);
       else await api.createAdminQuestion(this.adminToken, question);
       wx.showToast({ title: this.questionId ? "题目已更新" : "题目已加入题库", icon: "success" });
-      setTimeout(() => wx.navigateBack(), 700);
+      setTimeout(() => {
+        if (this.questionId) {
+          wx.navigateBack();
+          return;
+        }
+        const pages = getCurrentPages();
+        const previousPage = pages[pages.length - 2];
+        if (previousPage && previousPage.route === "pages/admin-questions/admin-questions") {
+          wx.navigateBack();
+        } else {
+          wx.redirectTo({ url: "/pages/admin-questions/admin-questions" });
+        }
+      }, 700);
     } catch (error) { wx.showToast({ title: error.message || "保存失败", icon: "none" }); }
     finally { this.setData({ saving: false }); }
   },
