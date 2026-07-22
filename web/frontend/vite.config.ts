@@ -10,8 +10,6 @@ export default defineConfig({
     },
   },
   server: {
-    // Nginx forwards the public Host header while the current deployment
-    // still uses Vite for temporary server-side preview.
     allowedHosts: ['mikanquiz.xyz', 'www.mikanquiz.xyz'],
     proxy: {
       '/api': {
