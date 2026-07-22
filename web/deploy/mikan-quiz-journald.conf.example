@@ -1,0 +1,5 @@
+# Install as /etc/systemd/journald.conf.d/mikan-quiz.conf.
+# These are system-journal-wide limits, not a per-service quota.
+[Journal]
+SystemMaxUse=2G
+MaxRetentionSec=7day

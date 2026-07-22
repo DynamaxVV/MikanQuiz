@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+import logging
+from time import perf_counter
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, File, Header, Query, Request, Response, UploadFile
@@ -12,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import AppSettings
 from app.database import get_session
 from app.errors import ApiError
+from app.logging import log_event
 from app.models import Admin, AdminSession, FontReference, Submission, as_utc, utc_now
 from app.schemas import (
     AdminCredentials,
@@ -79,7 +82,12 @@ def require_admin(
     token: str = Depends(get_admin_token), session: Session = Depends(get_session)
 ) -> AdminAuth:
     """Resolve the currently enabled account behind a protected route."""
-    admin, admin_session = admin_service.authenticated_admin(session, token)
+    try:
+        admin, admin_session = admin_service.authenticated_admin(session, token)
+    except ApiError as error:
+        if error.code == "ADMIN_SESSION_INVALID":
+            log_event("admin_session_invalid", logging.WARNING, error_code=error.code)
+        raise
     return AdminAuth(admin=admin, session=admin_session, token=token)
 
 
@@ -128,7 +136,19 @@ def create_quiz_attempt(
     data: AttemptCreate, session: Session = Depends(get_session)
 ) -> AttemptCreated:
     """Create and return a token-bound clean question set for a chosen mode."""
-    token, attempt, questions = quiz_service.create_attempt(session, data.mode)
+    try:
+        token, attempt, questions = quiz_service.create_attempt(session, data.mode)
+    except ApiError as error:
+        log_event(
+            "quiz_business_error", logging.WARNING, error_code=error.code, mode=data.mode
+        )
+        raise
+    log_event(
+        "quiz_attempt_created",
+        mode=attempt.mode,
+        attempt_id=attempt.id,
+        question_count=len(questions),
+    )
     return AttemptCreated(
         attempt_token=token,
         mode=attempt.mode,
@@ -156,14 +176,32 @@ def submit_quiz_attempt(
 ) -> SubmissionResult:
     """Grade exactly one bound attempt and return a retry-stable result."""
     try:
-        return quiz_service.submit_attempt(session, token, data)
-    except IntegrityError:
-        session.rollback()
         attempt = quiz_service.get_attempt(session, token)
-        submission = quiz_service.submission_for_attempt(session, attempt.id)
-        if submission is None:
-            raise
-        return quiz_service.stored_result(session, submission)
+        replayed = attempt.submitted_at is not None
+        try:
+            result = quiz_service.submit_attempt(session, token, data)
+        except IntegrityError:
+            session.rollback()
+            attempt = quiz_service.get_attempt(session, token)
+            submission = quiz_service.submission_for_attempt(session, attempt.id)
+            if submission is None:
+                raise
+            result = quiz_service.stored_result(session, submission)
+            replayed = True
+    except ApiError as error:
+        log_event("quiz_business_error", logging.WARNING, error_code=error.code)
+        raise
+    log_event(
+        "quiz_submission_replayed" if replayed else "quiz_submitted",
+        submission_id=result.submission_id,
+        attempt_id=attempt.id,
+        display_name=result.display_name,
+        mode=result.mode,
+        score=result.score,
+        correct_count=result.correct_count,
+        total=result.total,
+    )
+    return result
 
 
 @router.post("/admin/web/login", response_model=AdminStatus)
@@ -201,11 +239,21 @@ def miniprogram_login(
 
 
 def login_admin(
-    session: Session, data: AdminCredentials, settings: AppSettings | None
+    session: Session,
+    data: AdminCredentials,
+    settings: AppSettings | None,
 ) -> tuple[str, AdminSession, Admin]:
     """Keep both client login routes backed by one password/session workflow."""
     hours = settings.admin_session_hours if settings else 8
-    return admin_service.login_admin(session, data.username, data.password, hours)
+    try:
+        token, admin_session, admin = admin_service.login_admin(
+            session, data.username, data.password, hours
+        )
+    except ApiError:
+        log_event("admin_login_failed", logging.WARNING, admin_username=data.username)
+        raise
+    log_event("admin_login_succeeded", admin_username=admin.username)
+    return token, admin_session, admin
 
 
 @router.post("/admin/logout", status_code=204)
@@ -218,6 +266,7 @@ def logout(
     """Revoke the current bearer token without affecting other administrators."""
     auth.session.revoked_at = utc_now()
     session.commit()
+    log_event("admin_logout", admin_username=auth.admin.username)
     response.delete_cookie(
         key="quiz_admin_session",
         path="/api/v1/admin",
@@ -261,11 +310,15 @@ def list_admin_questions(
 @router.post("/admin/questions", response_model=QuestionResponse, status_code=201)
 def create_admin_question(
     data: QuestionWrite,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> QuestionResponse:
     """Create one validated question from the PC editor form."""
-    return admin_question(session, question_service.create_question(session, data))
+    question = question_service.create_question(session, data)
+    log_event(
+        "question_created", admin_username=auth.admin.username, question_id=question.id
+    )
+    return admin_question(session, question)
 
 
 @router.get("/admin/questions/{question_id}", response_model=QuestionResponse)
@@ -281,15 +334,34 @@ def get_admin_question(
 @router.post("/admin/images", response_model=ImageUploadResponse, status_code=201)
 async def upload_admin_image(
     image: UploadFile = File(...),
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     settings: AppSettings = Depends(get_app_settings),
 ) -> ImageUploadResponse:
     """Upload a bounded administrator image through server-side WebDAV credentials."""
     content = await image.read(image_service.MAX_IMAGE_BYTES + 1)
     content_type = image.content_type or ""
-    return ImageUploadResponse(
-        image_url=image_service.upload_image(settings, content, content_type)
+    started_at = perf_counter()
+    try:
+        image_url = image_service.upload_image(settings, content, content_type)
+    except ApiError as error:
+        log_event(
+            "r2_upload_failed",
+            logging.WARNING,
+            admin_username=auth.admin.username,
+            content_type=content_type,
+            byte_count=len(content),
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            error_code=error.code,
+        )
+        raise
+    log_event(
+        "r2_upload_succeeded",
+        admin_username=auth.admin.username,
+        content_type=content_type,
+        byte_count=len(content),
+        duration_ms=round((perf_counter() - started_at) * 1000, 2),
     )
+    return ImageUploadResponse(image_url=image_url)
 
 
 @router.post(
@@ -299,7 +371,7 @@ async def upload_admin_image(
 )
 def create_font_reference(
     data: FontReferenceWrite,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> FontReferenceResponse:
     """Create one public comparison image after administrator upload."""
@@ -307,13 +379,18 @@ def create_font_reference(
     session.add(item)
     session.commit()
     session.refresh(item)
+    log_event(
+        "font_reference_created",
+        admin_username=auth.admin.username,
+        reference_id=item.id,
+    )
     return font_reference_response(item)
 
 
 @router.delete("/admin/font-references/{reference_id}", status_code=204)
 def delete_font_reference(
     reference_id: int,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
     """Unpublish and remove one comparison image record."""
@@ -322,6 +399,11 @@ def delete_font_reference(
         raise ApiError(404, "FONT_REFERENCE_NOT_FOUND", "字体对照图不存在")
     session.delete(item)
     session.commit()
+    log_event(
+        "font_reference_deleted",
+        admin_username=auth.admin.username,
+        reference_id=reference_id,
+    )
     return Response(status_code=204)
 
 
@@ -329,22 +411,30 @@ def delete_font_reference(
 def patch_admin_question(
     question_id: int,
     data: QuestionPatch,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> QuestionResponse:
     """Apply a validated partial edit while preserving fixed option invariants."""
     question = question_service.get_question(session, question_id)
-    return admin_question(session, question_service.update_question(session, question, data))
+    updated = question_service.update_question(session, question, data)
+    log_event(
+        "question_updated", admin_username=auth.admin.username, question_id=updated.id
+    )
+    return admin_question(session, updated)
 
 
 @router.delete("/admin/questions/{question_id}", status_code=204)
 def delete_admin_question(
     question_id: int,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
     """Remove a current question without erasing immutable historical snapshots."""
-    question_service.delete_question(session, question_service.get_question(session, question_id))
+    question = question_service.get_question(session, question_id)
+    question_service.delete_question(session, question)
+    log_event(
+        "question_deleted", admin_username=auth.admin.username, question_id=question_id
+    )
     return Response(status_code=204)
 
 
@@ -367,23 +457,35 @@ def get_option_catalog(
 @router.put("/admin/option-groups", response_model=list[OptionGroupResponse])
 def put_option_catalog(
     data: OptionCatalogUpdate,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[OptionGroupResponse]:
     """Save groups and options independently from draw strategy settings."""
     question_service.replace_option_catalog(session, data)
+    log_event(
+        "option_catalog_replaced",
+        admin_username=auth.admin.username,
+        group_count=len(data.groups),
+        option_count=sum(len(group.options) for group in data.groups),
+    )
     return catalogue(session)
 
 
 @router.put("/admin/settings/strategy", response_model=SettingsResponse)
 def put_admin_strategy(
     data: StrategyUpdate,
-    _: AdminAuth = Depends(require_admin),
+    auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> SettingsResponse:
     """Save validated question count and star-weight strategy settings."""
     settings = question_service.update_strategy(
         session, data, question_service.get_settings(session)
+    )
+    log_event(
+        "strategy_updated",
+        admin_username=auth.admin.username,
+        question_count=data.question_count,
+        modes=data.modes,
     )
     return settings_response(settings)
 

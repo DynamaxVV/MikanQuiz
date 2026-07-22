@@ -8,7 +8,10 @@ User=quiz
 Group=quiz
 WorkingDirectory=/srv/quiz/current/backend
 EnvironmentFile=/etc/quiz/quiz-api.env
-ExecStart=/srv/quiz/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+SyslogIdentifier=mikan-quiz-api
+StandardOutput=journal
+StandardError=journal
+ExecStart=/srv/quiz/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --no-access-log --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

@@ -16,6 +16,7 @@ class AppSettings:
         r2_endpoint: Cloudflare R2 S3 API endpoint.
         r2_bucket: Bucket receiving private server-side uploads.
         r2_public_base_url: HTTPS delivery domain mapped to the bucket.
+        log_level: Application and Uvicorn JSON logging threshold.
     """
 
     database_url: str = "sqlite:///./var/quiz.db"
@@ -26,6 +27,7 @@ class AppSettings:
     r2_secret_access_key: str = ""
     r2_bucket: str = ""
     r2_public_base_url: str = ""
+    log_level: str = "INFO"
 
 
 def load_settings(env_file: Path | None = None) -> AppSettings:
@@ -35,6 +37,9 @@ def load_settings(env_file: Path | None = None) -> AppSettings:
     database_url = get("QUIZ_DATABASE_URL", "sqlite:///./var/quiz.db")
     session_hours = int(get("QUIZ_ADMIN_SESSION_HOURS", "8"))
     cookie_secure = get("QUIZ_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
+    log_level = get("QUIZ_LOG_LEVEL", "INFO").upper()
+    if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        log_level = "INFO"
     return AppSettings(
         database_url=database_url,
         admin_session_hours=session_hours,
@@ -44,6 +49,7 @@ def load_settings(env_file: Path | None = None) -> AppSettings:
         r2_secret_access_key=get("QUIZ_R2_SECRET_ACCESS_KEY"),
         r2_bucket=get("QUIZ_R2_BUCKET"),
         r2_public_base_url=get("QUIZ_R2_PUBLIC_BASE_URL"),
+        log_level=log_level,
     )
 
 

@@ -1,6 +1,7 @@
 """Server-side image upload through the local AWS SDK v3 R2 adapter."""
 
 import json
+import logging
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired, run
 from tempfile import NamedTemporaryFile
@@ -8,6 +9,7 @@ from urllib.parse import urlparse
 
 from app.config import AppSettings
 from app.errors import ApiError
+from app.logging import log_event
 
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -51,4 +53,9 @@ def run_uploader(settings: AppSettings, image_path: str, content_type: str) -> s
         result = run(["node", str(UPLOADER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=30)
         return json.loads(result.stdout)["imageUrl"]
     except (CalledProcessError, FileNotFoundError, TimeoutExpired, KeyError, json.JSONDecodeError) as error:
+        log_event(
+            "r2_uploader_error",
+            logging.ERROR,
+            error_type=type(error).__name__,
+        )
         raise ApiError(502, "IMAGE_UPLOAD_FAILED", "图片上传失败，请稍后重试") from error
