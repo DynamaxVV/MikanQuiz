@@ -13,6 +13,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.config import load_settings  # noqa: E402
+from app.database import ensure_sqlite_parent  # noqa: E402
 from app.models import Base  # noqa: E402
 
 
@@ -23,6 +24,7 @@ configured_url = config.get_main_option("sqlalchemy.url")
 default_url = "sqlite:///./var/quiz.db"
 database_url = configured_url if configured_url != default_url else load_settings().database_url
 config.set_main_option("sqlalchemy.url", database_url)
+ensure_sqlite_parent(database_url)
 target_metadata = Base.metadata
 
 

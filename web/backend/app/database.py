@@ -1,10 +1,11 @@
 """SQLAlchemy database creation and SQLite connection settings."""
 
 from collections.abc import Generator
+from pathlib import Path
 
 from fastapi import Request
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -13,6 +14,7 @@ class Database:
 
     def __init__(self, url: str) -> None:
         """Create an engine configured for a single-host SQLite deployment."""
+        ensure_sqlite_parent(url)
         connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
         self.engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
@@ -23,6 +25,16 @@ class Database:
         """Raise if the database cannot execute a trivial read."""
         with self.engine.connect() as connection:
             connection.execute(text("SELECT 1"))
+
+
+def ensure_sqlite_parent(url: str) -> None:
+    """Create the parent directory for a configured SQLite database file."""
+    if not url.startswith("sqlite"):
+        return
+    database = make_url(url).database
+    if not database or database == ":memory:":
+        return
+    Path(database).expanduser().parent.mkdir(parents=True, exist_ok=True)
 
 
 def _configure_sqlite(dbapi_connection: object, _: object) -> None:
