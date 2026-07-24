@@ -57,7 +57,7 @@ async function load(): Promise<void> {
   finally { loading.value = false; }
 }
 
-function handleSortChange({ prop, order }: { prop?: string; order?: string }): void {
+function handleSortChange({ prop, order }: { prop: string | null; order: 'ascending' | 'descending' | null }): void {
   if (!prop || !order) {
     sortBy.value = 'updated_at';
     sortOrder.value = 'desc';
