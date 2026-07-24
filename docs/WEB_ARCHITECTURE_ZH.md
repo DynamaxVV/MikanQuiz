@@ -13,7 +13,7 @@
 - Web 和小程序都提供匿名答题；昵称可选，不注册账号。
 - 同一设备可在 24 小时内恢复未完成答题；提交后不可重复提交。
 - Web 完整覆盖昵称、难度选择、答题、评分、错题解析和全部管理功能。
-- Web 新增管理员维护的"字形教程"；小程序暂不增加。
+- Web 新增管理员维护的"嵌字笔记"；小程序暂不增加。
 - 管理员有多个独立账号、权限相同；小程序和 Web 使用同一组账号密码。
 - 管理员账号只通过服务器命令新增、改密、停用和恢复，不提供后台账号管理页面。
 - 题目在 PC Web 上逐题录入，不做 Excel/ZIP 批量导入。
@@ -249,7 +249,7 @@ GET    /api/v1/admin/submissions?page=&display_name=&from=&to=
 GET    /api/v1/admin/submissions/{id}
 ```
 
-字形教程卡片由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增、`PATCH /api/v1/admin/font-references/{id}` 更新，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
+嵌字笔记卡片由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增、`PATCH /api/v1/admin/font-references/{id}` 更新，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
 - 后端以随机对象名写入配置目录，并返回由 `QUIZ_IMAGE_PUBLIC_BASE_URL` 组成的公开 HTTPS URL；管理表单自动填入并即时预览。
 - Web 和小程序直接请求该公开直链；后端不代传图片，也不提供匿名文件上传 API。
 - 当前不处理旧云存储图片，也不建立 `old_image_file_id -> new_image_url` 映射；恢复迁移时再单独制作并校验映射。
@@ -350,7 +350,7 @@ npm --prefix web/frontend run build
 - Web：首页 → 选难度 → 答完 → 提交 → 查看错题 → 再答一次。
 - Web：刷新后恢复 24 小时内未完成 attempt；已提交 attempt 不重复写记录。
 - Web：管理员登录、题目 CRUD、策略、字体快捷项、分页提交记录。
-- Web：字形教程、图片放大、图片失败状态。
+- Web：嵌字笔记、图片放大、图片失败状态。
 - 小程序：同一后端上的公开答题和账号密码管理登录。
 - Network：备案域名、TLS 证书链、真实 IP 转发、限流响应和图床可达性。
 - Backup：生成快照、上传 OSS，并从该对象恢复到临时库。
@@ -367,7 +367,7 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 
 ### Stage 2 — PC Web
 
-- 按 `DESIGN.md` 实现公开答题、管理端和字形教程卡片。
+- 按 `DESIGN.md` 实现公开答题、管理端和嵌字笔记卡片。
 - 结果门槛：构建通过；1440px/1024px/键盘/减少动态效果的视觉与功能验收通过。
 
 ### Stage 3 — Mini Program adapter
@@ -390,7 +390,7 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 
 - 坚果云公开直链的稳定格式、是否存在登录/防盗链限制，以及 Web 与小程序真机可达性。
 - 正式域名、中转服务器地址、真实 IP header 约定和 TLS 终止位置。
-- 字形教程首批静态图片清单。
+- 嵌字笔记首批静态图片清单。
 - 阿里云 OSS bucket、凭证注入方式和生命周期策略。
 
 这些事项不得通过硬编码 R2 密钥或猜测 URL 格式绕过；实现应保留明确配置点，并在正式迁移或生产部署前完成验证。

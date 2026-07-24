@@ -158,7 +158,7 @@ Web 登录只返回：
 | `POST` | `/admin/images` | multipart 表单字段 `image`；返回 `{image_url}` |
 | `PATCH` | `/admin/questions/{id}` | 完整题目字段的任意子集；返回完整题目 |
 | `DELETE` | `/admin/questions/{id}` | `204` |
-| `POST` | `/admin/font-references` | 新增 `{title,image_url,note,difficulty}` 字形教程卡片 |
+| `POST` | `/admin/font-references` | 新增 `{title,image_url,note,difficulty}` 嵌字笔记卡片 |
 | `PATCH` | `/admin/font-references/{id}` | 部分更新 `{title,image_url,note,difficulty}` 任意字段 |
 | `DELETE` | `/admin/font-references/{id}` | `204`，删除卡片 |
 | `GET` | `/admin/settings` | 完整 settings 对象 |
@@ -187,7 +187,7 @@ Web 登录只返回：
 
 `GET /api/health` 是 Nginx/systemd 的健康检查，只返回 `{"status":"ok","database":"ok"}`。
 
-公开字形教程卡片使用 `GET /api/v1/font-references`，无需管理员认证。
+公开嵌字笔记卡片使用 `GET /api/v1/font-references`，无需管理员认证。
 
 ### 管理端图片上传
 

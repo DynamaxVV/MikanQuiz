@@ -39,7 +39,7 @@ async function loadReferences(): Promise<void> {
   loading.value = true;
   error.value = '';
   try { references.value = await api.listFontReferences(); }
-  catch (caught) { error.value = caught instanceof Error ? caught.message : '字形教程加载失败。'; }
+  catch (caught) { error.value = caught instanceof Error ? caught.message : '嵌字笔记加载失败。'; }
   finally { loading.value = false; }
 }
 
@@ -51,8 +51,8 @@ onMounted(loadReferences);
     <div class="content">
       <BrandHeader />
       <section aria-labelledby="font-reference-title">
-        <h1 id="font-reference-title" class="page-title">字形教程</h1>
-        <p class="page-description">认识不同中文字体的风格与特点</p>
+        <h1 id="font-reference-title" class="page-title">嵌字笔记</h1>
+        <p class="page-description">探索汉字书写的形态特征</p>
 
         <p v-if="loading" class="loading-state">正在加载…</p>
         <ErrorPanel v-else-if="error" :message="error" @retry="loadReferences" />
@@ -68,7 +68,7 @@ onMounted(loadReferences);
           </div>
 
           <div v-if="references.length === 0" class="empty-state card">
-            <strong>尚未配置字形教程卡片</strong><span>管理员可在后台上传第一张卡片。</span>
+            <strong>尚未配置嵌字笔记卡片</strong><span>管理员可在后台上传第一张卡片。</span>
           </div>
           <div v-else-if="filtered.length === 0" class="empty-state card">
             <strong>没有匹配的卡片</strong>

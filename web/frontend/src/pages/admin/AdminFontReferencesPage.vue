@@ -21,7 +21,7 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try { references.value = await api.listFontReferences(); }
-  catch (caught) { error.value = caught instanceof Error ? caught.message : '字形教程加载失败。'; }
+  catch (caught) { error.value = caught instanceof Error ? caught.message : '嵌字笔记加载失败。'; }
   finally { loading.value = false; }
 }
 
@@ -112,8 +112,8 @@ onMounted(load);
     <section class="admin-content" aria-labelledby="font-reference-admin-title">
       <header>
         <p class="eyebrow">公开内容</p>
-        <h1 id="font-reference-admin-title" class="page-title">字形教程管理</h1>
-        <p class="page-description">管理字形教程卡片，支持标题、图片、说明与难度星级设置。</p>
+        <h1 id="font-reference-admin-title" class="page-title">嵌字笔记管理</h1>
+        <p class="page-description">管理嵌字笔记卡片，支持标题、图片、说明与难度星级设置。</p>
       </header>
 
       <div v-if="loading" class="loading card">正在读取卡片…</div>
