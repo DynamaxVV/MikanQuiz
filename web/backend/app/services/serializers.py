@@ -14,12 +14,12 @@ def catalogue(session: Session, difficulty: int | None = None) -> list[OptionGro
     by_group: dict[int, list[FontOptionResponse]] = {group.id: [] for group in groups}
     for option in options:
         if difficulty is None or option.minimum_difficulty <= difficulty:
-            by_group[option.group_id].append(FontOptionResponse(id=option.id, name=option.name, minimum_difficulty=option.minimum_difficulty, sort_order=option.sort_order))
+            by_group[option.group_id].append(FontOptionResponse(id=option.id, name=option.name, font_url=option.font_url, minimum_difficulty=option.minimum_difficulty, sort_order=option.sort_order))
     return [OptionGroupResponse(id=group.id, name=group.name, sort_order=group.sort_order, options=by_group[group.id]) for group in groups if by_group[group.id] or difficulty is None]
 
 
 def _option_response(option: FontOption) -> FontOptionResponse:
-    return FontOptionResponse(id=option.id, name=option.name, minimum_difficulty=option.minimum_difficulty, sort_order=option.sort_order)
+    return FontOptionResponse(id=option.id, name=option.name, font_url=option.font_url, minimum_difficulty=option.minimum_difficulty, sort_order=option.sort_order)
 
 
 def public_question(session: Session, question: Question) -> PublicQuestion:

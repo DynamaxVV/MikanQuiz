@@ -1,11 +1,14 @@
-"""Server-side image upload through the local AWS SDK v3 R2 adapter."""
+"""Server-side image and font upload through the local AWS SDK v3 R2 adapter."""
 
+import hashlib
 import json
 import logging
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired, run
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
+
+import httpx
 
 from app.config import AppSettings
 from app.errors import ApiError
@@ -14,7 +17,18 @@ from app.logging import log_event
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGES = {"image/jpeg": (".jpg", b"\xff\xd8\xff"), "image/png": (".png", b"\x89PNG\r\n\x1a\n"), "image/gif": (".gif", b"GIF8"), "image/webp": (".webp", b"RIFF")}
+MAX_FONT_BYTES = 20 * 1024 * 1024
+ALLOWED_FONTS = {
+    "font/ttf": (".ttf", b"\x00\x01\x00\x00"),
+    "application/x-font-ttf": (".ttf", b"\x00\x01\x00\x00"),
+    "font/otf": (".otf", b"OTTO"),
+    "application/x-font-opentype": (".otf", b"OTTO"),
+    "font/woff": (".woff", b"wOFF"),
+    "application/font-woff": (".woff", b"wOFF"),
+    "font/woff2": (".woff2", b"wOF2"),
+}
 UPLOADER = Path(__file__).resolve().parents[3] / "r2-uploader" / "upload.mjs"
+DELETER = Path(__file__).resolve().parents[3] / "r2-uploader" / "delete.mjs"
 
 
 def upload_image(settings: AppSettings, content: bytes, content_type: str) -> str:
@@ -46,9 +60,11 @@ def ensure_configured(settings: AppSettings) -> None:
         raise ApiError(503, "IMAGE_UPLOAD_UNCONFIGURED", "R2 地址配置无效")
 
 
-def run_uploader(settings: AppSettings, image_path: str, content_type: str) -> str:
+def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: str | None = None) -> str:
     """Invoke the local adapter and expose only its JSON public URL result."""
-    payload = {"filePath": image_path, "contentType": content_type, "endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "publicBaseUrl": settings.r2_public_base_url}
+    payload: dict[str, object] = {"filePath": file_path, "contentType": content_type, "endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "publicBaseUrl": settings.r2_public_base_url}
+    if key is not None:
+        payload["key"] = key
     try:
         result = run(["node", str(UPLOADER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=30)
         return json.loads(result.stdout)["imageUrl"]
@@ -59,3 +75,66 @@ def run_uploader(settings: AppSettings, image_path: str, content_type: str) -> s
             error_type=type(error).__name__,
         )
         raise ApiError(502, "IMAGE_UPLOAD_FAILED", "图片上传失败，请稍后重试") from error
+
+
+def upload_font(settings: AppSettings, content: bytes, content_type: str, filename: str = "font") -> str:
+    """Validate one font file, deduplicate by content hash, upload only if absent."""
+    suffix = validate_font(content, content_type)
+    ensure_configured(settings)
+    content_hash = hashlib.sha256(content).hexdigest()
+    safe_filename = _safe_filename(filename)
+    key = f"quiz-fonts/{content_hash[:12]}-{safe_filename}{suffix}"
+    public_url = f"{settings.r2_public_base_url.rstrip('/')}/{key}"
+    if _font_already_uploaded(public_url):
+        return public_url
+    with NamedTemporaryFile(suffix=suffix) as font:
+        font.write(content)
+        font.flush()
+        return run_uploader(settings, font.name, content_type, key)
+
+
+def validate_font(content: bytes, content_type: str) -> str:
+    """Reject oversized, unsupported, or malformed font file uploads."""
+    allowed = ALLOWED_FONTS.get(content_type.lower())
+    if allowed is None or len(content) > MAX_FONT_BYTES or not content.startswith(allowed[1]):
+        raise ApiError(422, "INVALID_FONT", "仅支持 20MB 以内的 TTF、OTF、WOFF 或 WOFF2 字体文件")
+    return allowed[0]
+
+
+def _safe_filename(filename: str) -> str:
+    """Keep only alphanumeric, hyphen, underscore and dot characters."""
+    clean = "".join(c if c.isalnum() or c in "-_. " else "" for c in filename)
+    return clean.strip()[:64] or "font"
+
+
+def _font_already_uploaded(url: str) -> bool:
+    """Check whether a font file already exists at its public R2 URL."""
+    try:
+        response = httpx.head(url, timeout=5)
+        return response.status_code == 200
+    except httpx.RequestError:
+        return False
+
+
+def delete_r2_object(settings: AppSettings, font_url: str) -> None:
+    """Extract the R2 key from a public URL and delete the object."""
+    key = _url_to_key(settings, font_url)
+    ensure_configured(settings)
+    payload = {"endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "key": key}
+    try:
+        run(["node", str(DELETER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=15)
+    except (CalledProcessError, FileNotFoundError, TimeoutExpired) as error:
+        log_event(
+            "r2_delete_error",
+            logging.WARNING,
+            error_type=type(error).__name__,
+            key=key,
+        )
+
+
+def _url_to_key(settings: AppSettings, url: str) -> str:
+    """Strip the public base URL prefix to recover the R2 object key."""
+    base = settings.r2_public_base_url.rstrip("/") + "/"
+    if url.startswith(base):
+        return url[len(base):]
+    return url

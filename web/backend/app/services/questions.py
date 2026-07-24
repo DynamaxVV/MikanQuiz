@@ -140,10 +140,11 @@ def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> li
 def _upsert_option(session: Session, option: FontOption | None, group_id: int, data: FontOptionWrite) -> None:
     """Create or update one option without inventing a second write abstraction."""
     if option is None:
-        session.add(FontOption(group_id=group_id, name=data.name.strip(), minimum_difficulty=data.minimum_difficulty, sort_order=data.sort_order))
+        session.add(FontOption(group_id=group_id, name=data.name.strip(), font_url=data.font_url, minimum_difficulty=data.minimum_difficulty, sort_order=data.sort_order))
         return
     option.group_id = group_id
     option.name = data.name.strip()
+    option.font_url = data.font_url
     option.minimum_difficulty = data.minimum_difficulty
     option.sort_order = data.sort_order
 
