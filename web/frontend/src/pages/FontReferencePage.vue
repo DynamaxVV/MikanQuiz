@@ -160,7 +160,7 @@ onMounted(loadReferences);
   .content { width: min(100% - 32px, 1280px); padding-bottom: 48px; }
   .page-title { font-size: 28px; }
   .page-description { font-size: 14px; }
-  .filter-bar { flex-direction: column; gap: 14px; }
+  .filter-bar { flex-direction: column; align-items: stretch; gap: 14px; }
   .search-label input { width: 100%; }
   .card-grid { grid-template-columns: 1fr; }
   .card-body img { width: 100px; height: 72px; }
