@@ -15,6 +15,8 @@ const difficulties = ref([1, 2, 3]);
 const loading = ref(false);
 const error = ref('');
 const importFileRef = ref<HTMLInputElement | null>(null);
+const sortBy = ref('updated_at');
+const sortOrder = ref('desc');
 
 async function exportQuestions(): Promise<void> {
   try {
@@ -48,11 +50,22 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    const result = await api.listQuestions(page.value, undefined, difficulties.value);
+    const result = await api.listQuestions(page.value, undefined, difficulties.value, sortBy.value, sortOrder.value);
     questions.value = result.items;
     total.value = result.total;
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '无法读取题库。'; }
   finally { loading.value = false; }
+}
+
+function handleSortChange({ prop, order }: { prop?: string; order?: string }): void {
+  if (!prop || !order) {
+    sortBy.value = 'updated_at';
+    sortOrder.value = 'desc';
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === 'ascending' ? 'asc' : 'desc';
+  }
+  void load();
 }
 
 function search(): void { page.value = 1; void load(); }
@@ -94,7 +107,7 @@ onMounted(load);
       <ErrorPanel v-if="error" :message="error" @retry="load" />
       <section v-else-if="loading" class="loading card">正在读取题库…</section>
       <section v-else-if="questions.length === 0" class="empty-state card"><strong>还没有题目</strong><RouterLink to="/admin/questions/new">新增第一道题</RouterLink></section>
-      <section v-else class="table-card card"><el-table :data="questions" row-key="id" @row-click="goDetail"><el-table-column prop="id" label="ID" width="70" sortable /><el-table-column label="缩略图" width="92"><template #default="scope"><img v-if="scope.row.imageUrl" class="thumbnail" :src="scope.row.imageUrl" alt="" /><span v-else class="no-image">无图</span></template></el-table-column><el-table-column prop="text" label="题干" min-width="260" show-overflow-tooltip /><el-table-column label="难度" width="110" sortable><template #default="scope">{{ '★'.repeat(scope.row.difficulty) }}</template></el-table-column><el-table-column prop="answer" label="正确答案" width="110" sortable /><el-table-column label="操作" width="170" fixed="right"><template #default="scope"><div class="row-actions"><RouterLink :to="`/admin/questions/${encodeURIComponent(scope.row.id)}/edit`" @click.stop>编辑</RouterLink><button type="button" @click.stop="remove(scope.row)">删除</button></div></template></el-table-column></el-table></section>
+      <section v-else class="table-card card"><el-table :data="questions" row-key="id" @row-click="goDetail" @sort-change="handleSortChange"><el-table-column prop="id" label="ID" width="70" sortable="custom" /><el-table-column label="缩略图" width="92"><template #default="scope"><img v-if="scope.row.imageUrl" class="thumbnail" :src="scope.row.imageUrl" alt="" /><span v-else class="no-image">无图</span></template></el-table-column><el-table-column prop="text" label="题干" min-width="260" show-overflow-tooltip /><el-table-column label="难度" width="110" sortable="custom" prop="difficulty"><template #default="scope">{{ '★'.repeat(scope.row.difficulty) }}</template></el-table-column><el-table-column prop="answer" label="正确答案" width="110" sortable="custom" /><el-table-column label="操作" width="170" fixed="right"><template #default="scope"><div class="row-actions"><RouterLink :to="`/admin/questions/${encodeURIComponent(scope.row.id)}/edit`" @click.stop>编辑</RouterLink><button type="button" @click.stop="remove(scope.row)">删除</button></div></template></el-table-column></el-table></section>
       <el-pagination v-if="total > 0" class="pagination" background layout="prev, pager, next, total" :current-page="page" :page-size="20" :total="total" @current-change="changePage" />
     </section>
   </AdminShell>

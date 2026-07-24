@@ -274,8 +274,8 @@ export const api = {
 
   getAdminSession: async (): Promise<AdminSession> => sessionFrom(await request<RawSession>('/admin/session')),
 
-  listQuestions: async (page: number, query?: string, difficulties?: number[]): Promise<PageResult<Question>> => {
-    const search = new URLSearchParams(queryString({ page, query }).slice(1));
+  listQuestions: async (page: number, query?: string, difficulties?: number[], sortBy?: string, sortOrder?: string): Promise<PageResult<Question>> => {
+    const search = new URLSearchParams(queryString({ page, query, sort_by: sortBy, sort_order: sortOrder }).slice(1));
     difficulties?.forEach((difficulty) => search.append('difficulty', String(difficulty)));
     const raw = await request<RawPage<RawQuestion>>(`/admin/questions?${search.toString()}`);
     return { items: raw.items.map(mapQuestion), page: raw.page, pageSize: raw.page_size, total: raw.total };

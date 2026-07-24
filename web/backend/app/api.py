@@ -296,12 +296,14 @@ def list_admin_questions(
     page_size: int = Query(default=20, ge=1, le=100),
     query: str | None = Query(default=None, max_length=500),
     difficulty: list[Annotated[int, Query(ge=1, le=3)]] | None = Query(default=None),
+    sort_by: str = Query(default="updated_at", pattern="^(id|difficulty|text|updated_at)$"),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     _: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> QuestionPage:
     """List current questions through server-side filters and bounded pagination."""
     items, total = question_service.list_questions(
-        session, page, page_size, query, difficulty
+        session, page, page_size, query, difficulty, sort_by, sort_order
     )
     return QuestionPage(
         items=[admin_question(session, item) for item in items],

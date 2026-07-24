@@ -1,6 +1,6 @@
 """Question CRUD, option catalogue and singleton settings operations."""
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, asc, desc
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
@@ -83,8 +83,8 @@ def delete_question(session: Session, question: Question) -> None:
     session.commit()
 
 
-def list_questions(session: Session, page: int, page_size: int, query: str | None, difficulties: list[int] | None) -> tuple[list[Question], int]:
-    """Return a stable, bounded question page with optional filters."""
+def list_questions(session: Session, page: int, page_size: int, query: str | None, difficulties: list[int] | None, sort_by: str = "updated_at", sort_order: str = "desc") -> tuple[list[Question], int]:
+    """Return a stable, bounded question page with optional filters and sorting."""
     statement = select(Question)
     count_statement = select(func.count()).select_from(Question)
     if query:
@@ -94,7 +94,9 @@ def list_questions(session: Session, page: int, page_size: int, query: str | Non
         statement = statement.where(Question.difficulty.in_(difficulties))
         count_statement = count_statement.where(Question.difficulty.in_(difficulties))
     total = int(session.scalar(count_statement))
-    items = session.scalars(statement.order_by(Question.updated_at.desc(), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    sort_column = getattr(Question, sort_by, Question.updated_at)
+    order_fn = desc if sort_order == "desc" else asc
+    items = session.scalars(statement.order_by(order_fn(sort_column), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
     return items, total
 
 
