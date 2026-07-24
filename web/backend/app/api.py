@@ -1,7 +1,8 @@
 """Versioned FastAPI routes for anonymous quiz and administrator workflows."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+import json
 import logging
 from time import perf_counter
 from typing import Annotated
@@ -15,7 +16,7 @@ from app.config import AppSettings
 from app.database import get_session
 from app.errors import ApiError
 from app.logging import log_event
-from app.models import Admin, AdminSession, FontReference, Submission, as_utc, utc_now
+from app.models import Admin, AdminSession, FontOption, FontReference, Question, Submission, as_utc, utc_now
 from app.schemas import (
     AdminCredentials,
     AdminSessionResponse,
@@ -30,6 +31,9 @@ from app.schemas import (
     OptionGroupResponse,
     HealthResponse,
     ImageUploadResponse,
+    QuestionExportItem,
+    QuestionImportPayload,
+    QuestionImportResult,
     QuestionPage,
     QuestionPatch,
     QuestionResponse,
@@ -321,7 +325,7 @@ def create_admin_question(
     return admin_question(session, question)
 
 
-@router.get("/admin/questions/{question_id}", response_model=QuestionResponse)
+@router.get("/admin/questions/{question_id:int}", response_model=QuestionResponse)
 def get_admin_question(
     question_id: int,
     _: AdminAuth = Depends(require_admin),
@@ -407,7 +411,7 @@ def delete_font_reference(
     return Response(status_code=204)
 
 
-@router.patch("/admin/questions/{question_id}", response_model=QuestionResponse)
+@router.patch("/admin/questions/{question_id:int}", response_model=QuestionResponse)
 def patch_admin_question(
     question_id: int,
     data: QuestionPatch,
@@ -423,7 +427,7 @@ def patch_admin_question(
     return admin_question(session, updated)
 
 
-@router.delete("/admin/questions/{question_id}", status_code=204)
+@router.delete("/admin/questions/{question_id:int}", status_code=204)
 def delete_admin_question(
     question_id: int,
     auth: AdminAuth = Depends(require_admin),
@@ -436,6 +440,91 @@ def delete_admin_question(
         "question_deleted", admin_username=auth.admin.username, question_id=question_id
     )
     return Response(status_code=204)
+
+
+@router.get("/admin/questions/export")
+def export_admin_questions(
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Export all questions as a downloadable JSON file."""
+    items = session.scalars(
+        select(Question).order_by(Question.id)
+    ).all()
+    payload = {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "questions": [
+            {
+                "id": q.id,
+                "text": q.text,
+                "image_url": q.image_url,
+                "difficulty": q.difficulty,
+                "correct_option_id": q.correct_option_id,
+                "explanation": q.explanation,
+                "created_at": as_utc(q.created_at).isoformat(),
+                "updated_at": as_utc(q.updated_at).isoformat(),
+            }
+            for q in items
+        ],
+    }
+    json_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    log_event(
+        "questions_exported",
+        admin_username=auth.admin.username,
+        count=len(items),
+    )
+    return Response(
+        content=json_bytes,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=questions.json"},
+    )
+
+
+@router.post("/admin/questions/import", response_model=QuestionImportResult)
+def import_admin_questions(
+    data: QuestionImportPayload,
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> QuestionImportResult:
+    """Bulk-import questions from a JSON file exported by the same endpoint."""
+    created = 0
+    failed = 0
+    errors: list[str] = []
+
+    for idx, item in enumerate(data.questions):
+        n = idx + 1
+
+        if item.correct_option_id is not None:
+            option = session.get(FontOption, item.correct_option_id)
+            if option is None:
+                failed += 1
+                errors.append(f"第 {n} 题「{item.text[:20]}」：字体 ID {item.correct_option_id} 不存在")
+                continue
+
+        question = Question(
+            text=item.text.strip(),
+            image_url=item.image_url.strip() if item.image_url else None,
+            difficulty=item.difficulty,
+            correct_option_id=item.correct_option_id,
+            explanation=item.explanation.strip(),
+        )
+        session.add(question)
+        created += 1
+
+    session.commit()
+    log_event(
+        "questions_imported",
+        admin_username=auth.admin.username,
+        created=created,
+        failed=failed,
+    )
+    return QuestionImportResult(
+        total=len(data.questions),
+        created=created,
+        failed=failed,
+        errors=errors,
+    )
 
 
 @router.get("/admin/settings", response_model=SettingsResponse)

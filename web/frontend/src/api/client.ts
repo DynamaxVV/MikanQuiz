@@ -298,6 +298,31 @@ export const api = {
 
   deleteQuestion: (id: string): Promise<void> => request<void>(`/admin/questions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  exportQuestions: async (): Promise<void> => {
+    const response = await fetch(`${API_BASE}/admin/questions/export`, { credentials: 'same-origin' });
+    if (!response.ok) {
+      const text = await response.text();
+      let msg = '导出失败';
+      try { const body = JSON.parse(text); msg = body?.error?.message ?? msg; } catch { /* ignore */ }
+      throw new ApiError(msg, response.status);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `questions-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  importQuestions: async (file: File): Promise<{ total: number; created: number; failed: number; errors: string[] }> => {
+    const text = await file.text();
+    const body = JSON.parse(text);
+    return request('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
+  },
+
   createFontReference: async (data: Pick<FontReference, 'title' | 'imageUrl' | 'note'>): Promise<FontReference> =>
     mapFontReference(await request<RawFontReference>('/admin/font-references', {
       method: 'POST',

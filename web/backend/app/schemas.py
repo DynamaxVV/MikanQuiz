@@ -111,6 +111,46 @@ class QuestionResponse(ApiModel):
     updated_at: datetime
 
 
+class QuestionExportItem(ApiModel):
+    """One question in a portable JSON dump."""
+
+    text: str
+    image_url: str | None
+    difficulty: int
+    correct_option_id: int | None
+    explanation: str
+
+
+class QuestionImportItem(ApiModel):
+    """One question accepted during bulk import.  id is ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    text: str = Field(min_length=1, max_length=500)
+    image_url: str | None = None
+    difficulty: int = Field(ge=1, le=3)
+    correct_option_id: int | None = None
+    explanation: str = Field(min_length=1, max_length=1000)
+
+
+class QuestionImportPayload(ApiModel):
+    """The top-level file structure read by the import endpoint."""
+
+    version: int
+    exported_at: str | None = None
+    questions: list[QuestionImportItem]
+
+
+class QuestionImportResult(ApiModel):
+    """Import summary returned after a successful bulk-create pass."""
+
+    total: int
+    created: int
+    failed: int
+    errors: list[str] = Field(default_factory=list)
+
+
 class ImageUploadResponse(ApiModel):
     """The public image URL produced by the server-side R2 upload."""
 
