@@ -1,28 +1,28 @@
-# Changelog
+# 更新日志
 
 ## 1.0.2 (2026-07-24)
 
-### Added
-- **Clipboard paste image upload**: Admin can Ctrl+V paste images directly onto the question editor page
-- **Deferred image upload**: Images are previewed locally first; upload to R2 happens together with question save
-- **Question import/export**:
-  - Export all questions as downloadable JSON file (GET `/admin/questions/export`)
-  - Bulk-import questions from JSON file (POST `/admin/questions/import`)
-  - Export filename includes minutes/seconds (e.g. `questions-2026-07-24_09-35-22.json`)
-- **Prev/next navigation**: Question detail page has «上一题 / 下一题» buttons to browse questions within the current list page
-- **Question ID display**: Visible ID column in the question list table, and ID shown on the detail page
-- **Server-side column sorting**: Click ID/difficulty/answer column headers to sort the full dataset (not just the current page)
+### 新增
+- **剪切板粘贴图片上传**：题目编辑页支持 Ctrl+V 直接粘贴图片
+- **图片延迟上传**：选图后本地预览，保存时才上传到 R2
+- **题库导入/导出**：
+  - 导出所有题目为 JSON 文件（GET `/admin/questions/export`）
+  - 从 JSON 文件批量导入题目（POST `/admin/questions/import`）
+  - 导出文件名精确到分秒（如 `questions-2026-07-24_09-35-22.json`）
+- **上一题/下一题导航**：题目详情页新增翻页按钮，可浏览当前列表页内的题目
+- **题目 ID 显示**：题库列表新增 ID 列，详情页也显示题目 ID
+- **服务端排序**：点击 ID/难度/正确答案列头，全局排序（不限于当前页）
 
-### Changed
-- Image upload flow: no longer uploads immediately on file selection; waits for save button
-- Export/import buttons moved from toolbar pill buttons to muted text links in the toolbar
-- Question list returns `answer` field (correct font name) in the API response
-- Star-difficulty label on detail page changed from `★★★ 难度` to `难度 ★★★`
+### 变更
+- 图片上传流程：不再选择即上传，改为保存时统一上传
+- 导入/导出按钮：从工具栏胶囊按钮改为工具栏中的小字链接
+- 列表 API 返回 `answer` 字段（正确字体名称），表格正确列显示字体名
+- 详情页星级显示从 `★★★ 难度` 改为 `难度 ★★★`
 
-### Fixed
-- Route conflict: added `:int` type constraint to `{question_id}` path parameters to prevent export/import routes from being intercepted
-- Import validation: `image_url` accepts `null` values, and extra JSON fields (`id`, `created_at`, `updated_at`) are silently ignored
-- Narrow-screen layout: export/import buttons no longer overflow or wrap incorrectly
+### 修复
+- 路由冲突：`{question_id}` 路径添加 `:int` 类型约束，避免拦截 export/import 路由
+- 导入校验：`image_url` 允许 `null` 值，忽略 JSON 中的额外字段（`id`、`created_at`、`updated_at`）
+- 窄屏布局：导入/导出按钮不再溢出或换行错乱
 
-### Version
-- Bumped from `0.1.0` → `1.0.2`
+### 版本
+- 从 `0.1.0` 升级到 `1.0.2`
