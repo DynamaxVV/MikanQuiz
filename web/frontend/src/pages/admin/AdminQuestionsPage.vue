@@ -66,7 +66,8 @@ function toggleDifficulty(star: number): void {
 function changePage(nextPage: number): void { page.value = nextPage; void load(); }
 function goDetail(row: unknown): void {
   const question = row as Question;
-  void router.push({ path: `/admin/questions/${encodeURIComponent(question.id)}`, state: { ids: questions.value.map((q) => q.id) } });
+  const ids = questions.value.map((q) => q.id);
+  void router.push(`/admin/questions/${encodeURIComponent(question.id)}?ids=${ids.join(',')}`);
 }
 
 async function remove(row: unknown): Promise<void> {

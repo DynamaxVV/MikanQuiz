@@ -32,8 +32,8 @@ def admin_question(session: Session, question: Question) -> QuestionResponse:
     option = session.get(FontOption, question.correct_option_id) if question.correct_option_id else None
     group = session.get(OptionGroup, option.group_id) if option else None
     if option is None or group is None:
-        return QuestionResponse(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, correct_option_id=None, correct_option=None, correct_group=None, configuration_error="正确字体已被删除，请重新选择后保存题目", explanation=question.explanation, created_at=as_utc(question.created_at), updated_at=as_utc(question.updated_at))
-    return QuestionResponse(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, correct_option_id=option.id, correct_option=_option_response(option), correct_group=OptionGroupResponse(id=group.id, name=group.name, sort_order=group.sort_order, options=[]), explanation=question.explanation, created_at=as_utc(question.created_at), updated_at=as_utc(question.updated_at))
+        return QuestionResponse(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, correct_option_id=None, correct_option=None, correct_group=None, configuration_error="正确字体已被删除，请重新选择后保存题目", answer=None, explanation=question.explanation, created_at=as_utc(question.created_at), updated_at=as_utc(question.updated_at))
+    return QuestionResponse(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, correct_option_id=option.id, correct_option=_option_response(option), correct_group=OptionGroupResponse(id=group.id, name=group.name, sort_order=group.sort_order, options=[]), answer=option.name, explanation=question.explanation, created_at=as_utc(question.created_at), updated_at=as_utc(question.updated_at))
 
 
 def settings_response(settings: QuizSettings) -> SettingsResponse:

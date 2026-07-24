@@ -106,6 +106,7 @@ class QuestionResponse(ApiModel):
     correct_option: FontOptionResponse | None
     correct_group: OptionGroupResponse | None
     configuration_error: str | None = None
+    answer: str | None = None
     explanation: str
     created_at: datetime
     updated_at: datetime
