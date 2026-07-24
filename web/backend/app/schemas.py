@@ -31,8 +31,20 @@ class FontOptionWrite(ApiModel):
 
     id: int | None = None
     name: str = Field(min_length=1, max_length=500)
+    font_url: str | None = Field(default=None, max_length=2048)
     minimum_difficulty: int = Field(ge=1, le=3)
     sort_order: int = Field(ge=0, le=10000)
+
+    @field_validator("font_url", mode="after")
+    @classmethod
+    def validate_font_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("字体地址必须是 HTTPS URL")
+        return value
 
 
 class OptionCatalogUpdate(ApiModel):
@@ -44,6 +56,7 @@ class OptionCatalogUpdate(ApiModel):
 class FontOptionResponse(ApiModel):
     id: int
     name: str
+    font_url: str | None = None
     minimum_difficulty: int
     sort_order: int
 
@@ -159,11 +172,12 @@ class ImageUploadResponse(ApiModel):
 
 
 class FontReferenceWrite(ApiModel):
-    """One administrator-maintained public font comparison image."""
+    """One administrator-maintained public font comparison card."""
 
     title: str = Field(min_length=1, max_length=100)
     image_url: str = Field(min_length=1, max_length=2048)
     note: str = Field(default="", max_length=500)
+    difficulty: int = Field(default=1, ge=1, le=3)
 
     @field_validator("title", mode="after")
     @classmethod
@@ -192,13 +206,23 @@ class FontReferenceWrite(ApiModel):
 
 
 class FontReferenceResponse(ApiModel):
-    """A public-safe font comparison image record."""
+    """A public-safe font comparison card record."""
 
     id: int
     title: str
     image_url: str
     note: str
+    difficulty: int
     created_at: datetime
+
+
+class FontReferenceUpdate(ApiModel):
+    """Partial update for a font comparison card."""
+
+    title: str | None = Field(default=None, max_length=100)
+    image_url: str | None = Field(default=None, max_length=2048)
+    note: str | None = Field(default=None, max_length=500)
+    difficulty: int | None = Field(default=None, ge=1, le=3)
 
 
 class PublicQuestion(ApiModel):

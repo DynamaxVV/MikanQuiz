@@ -27,7 +27,7 @@ function beginQuiz(): void {
             <span aria-hidden="true">→</span>
           </button>
           <RouterLink class="action-card reference-card" to="/font-reference">
-            <span><strong>字体对照表</strong><small>查看常用字形对照图片</small></span>
+            <span><strong>字形教程</strong><small>认识不同中文字体的风格与特点</small></span>
             <span aria-hidden="true">→</span>
           </RouterLink>
           <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>

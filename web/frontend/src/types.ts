@@ -1,7 +1,7 @@
 export type DifficultyMode = 'beginner' | 'proficient' | 'challenge';
 export type AnswerKey = string;
 
-export interface FontOption { id: string; name: string; minimumDifficulty: number; sortOrder: number; }
+export interface FontOption { id: string; name: string; fontUrl?: string; minimumDifficulty: number; sortOrder: number; }
 export interface OptionGroup { id: string; name: string; sortOrder: number; options: FontOption[]; }
 
 export interface QuizSettings {
@@ -95,5 +95,6 @@ export interface FontReference {
   title: string;
   imageUrl: string;
   note: string;
+  difficulty: number;
   createdAt: string;
 }

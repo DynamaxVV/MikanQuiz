@@ -40,7 +40,7 @@ interface RawQuestion {
   updated_at?: string;
 }
 
-interface RawFontOption { id: number; name: string; minimum_difficulty: number; sort_order: number; }
+interface RawFontOption { id: number; name: string; font_url: string | null; minimum_difficulty: number; sort_order: number; }
 interface RawOptionGroup { id: number; name: string; sort_order: number; options: RawFontOption[]; }
 
 interface RawSettings {
@@ -102,6 +102,7 @@ interface RawFontReference {
   title: string;
   image_url: string;
   note: string;
+  difficulty: number;
   created_at: string;
 }
 
@@ -176,7 +177,7 @@ function mapOptions(options: string[]): Record<AnswerKey, string> {
 }
 
 function mapGroup(group: RawOptionGroup): OptionGroup {
-  return { id: String(group.id), name: group.name, sortOrder: group.sort_order, options: group.options.map((option) => ({ id: String(option.id), name: option.name, minimumDifficulty: option.minimum_difficulty, sortOrder: option.sort_order })) };
+  return { id: String(group.id), name: group.name, sortOrder: group.sort_order, options: group.options.map((option) => ({ id: String(option.id), name: option.name, fontUrl: option.font_url ?? undefined, minimumDifficulty: option.minimum_difficulty, sortOrder: option.sort_order })) };
 }
 
 function mapQuestion(question: RawQuestion): Question {
@@ -238,6 +239,7 @@ function mapFontReference(item: RawFontReference): FontReference {
     title: item.title,
     imageUrl: item.image_url,
     note: item.note,
+    difficulty: item.difficulty,
     createdAt: item.created_at,
   };
 }
@@ -296,6 +298,40 @@ export const api = {
     return response.image_url;
   },
 
+  uploadFont: (file: File, onProgress?: (pct: number) => void): Promise<string> => {
+    if (!onProgress) {
+      const form = new FormData();
+      form.set('font', file);
+      return request<{ image_url: string }>('/admin/fonts', { method: 'POST', body: form }).then((r) => r.image_url);
+    }
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const form = new FormData();
+      form.set('font', file);
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText).image_url);
+          } catch { reject(new ApiError('服务返回了无法识别的响应。', xhr.status, 'INVALID_RESPONSE')); }
+        } else {
+          let msg = '字体上传失败，请稍后重试。';
+          try {
+            const body = JSON.parse(xhr.responseText);
+            msg = body?.error?.message || body?.message || msg;
+          } catch { /* use default */ }
+          reject(new ApiError(msg, xhr.status));
+        }
+      };
+      xhr.onerror = () => reject(new ApiError('上传请求发送失败。', 0, 'NETWORK_ERROR'));
+      xhr.open('POST', `${API_BASE}/admin/fonts`);
+      xhr.withCredentials = true;
+      xhr.send(form);
+    });
+  },
+
   deleteQuestion: (id: string): Promise<void> => request<void>(`/admin/questions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   exportQuestions: async (): Promise<void> => {
@@ -325,10 +361,21 @@ export const api = {
     return request('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
   },
 
-  createFontReference: async (data: Pick<FontReference, 'title' | 'imageUrl' | 'note'>): Promise<FontReference> =>
+  createFontReference: async (data: Pick<FontReference, 'title' | 'imageUrl' | 'note'> & { difficulty?: number }): Promise<FontReference> =>
     mapFontReference(await request<RawFontReference>('/admin/font-references', {
       method: 'POST',
-      body: JSON.stringify({ title: data.title, image_url: data.imageUrl, note: data.note }),
+      body: JSON.stringify({ title: data.title, image_url: data.imageUrl, note: data.note, difficulty: data.difficulty ?? 1 }),
+    })),
+
+  updateFontReference: async (id: string, data: Partial<Pick<FontReference, 'title' | 'imageUrl' | 'note' | 'difficulty'>>): Promise<FontReference> =>
+    mapFontReference(await request<RawFontReference>(`/admin/font-references/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.imageUrl !== undefined ? { image_url: data.imageUrl } : {}),
+        ...(data.note !== undefined ? { note: data.note } : {}),
+        ...(data.difficulty !== undefined ? { difficulty: data.difficulty } : {}),
+      }),
     })),
 
   deleteFontReference: (id: string): Promise<void> =>
@@ -338,7 +385,41 @@ export const api = {
 
   getOptionGroups: async (): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups')).map(mapGroup),
 
-  saveOptionGroups: async (groups: OptionGroup[]): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups', { method: 'PUT', body: JSON.stringify({ groups: groups.map((group) => ({ id: Number(group.id) || undefined, name: group.name, sort_order: group.sortOrder, options: group.options.map((option) => ({ id: Number(option.id) || undefined, name: option.name, minimum_difficulty: option.minimumDifficulty, sort_order: option.sortOrder })) })) }) })).map(mapGroup),
+  saveOptionGroups: async (groups: OptionGroup[]): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups', { method: 'PUT', body: JSON.stringify({ groups: groups.map((group) => ({ id: Number(group.id) || undefined, name: group.name, sort_order: group.sortOrder, options: group.options.map((option) => ({ id: Number(option.id) || undefined, name: option.name, font_url: option.fontUrl || undefined, minimum_difficulty: option.minimumDifficulty, sort_order: option.sortOrder })) })) }) })).map(mapGroup),
+
+  exportOptionGroups: async (): Promise<void> => {
+    const response = await fetch(`${API_BASE}/admin/option-groups/export`, { credentials: 'same-origin' });
+    if (!response.ok) {
+      const text = await response.text();
+      let msg = '导出失败';
+      try { const body = JSON.parse(text); msg = body?.error?.message ?? msg; } catch { /* ignore */ }
+      throw new ApiError(msg, response.status);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+    a.download = `font-catalog-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  importOptionGroups: async (file: File): Promise<OptionGroup[]> => {
+    const text = await file.text();
+    const body = JSON.parse(text);
+    const groups = (body.groups || []).map((g: Record<string, unknown>) => ({
+      name: g.name || '',
+      sort_order: g.sort_order ?? 0,
+      options: (Array.isArray(g.options) ? g.options : []).map((o: Record<string, unknown>) => ({
+        name: o.name || '', minimum_difficulty: o.minimum_difficulty ?? 1, sort_order: o.sort_order ?? 0, font_url: o.font_url || undefined,
+      })),
+    }));
+    return (await request<RawOptionGroup[]>('/admin/option-groups/import', { method: 'POST', body: JSON.stringify({ groups }) })).map(mapGroup);
+  },
 
   saveStrategy: async (settings: Pick<QuizSettings, 'questionCount' | 'modes'>): Promise<QuizSettings> =>
     mapSettings(await request<RawSettings>('/admin/settings/strategy', { method: 'PUT', body: JSON.stringify({ question_count: settings.questionCount, modes: settings.modes }) })),

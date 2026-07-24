@@ -40,6 +40,7 @@ class FontOption(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("option_groups.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    font_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     minimum_difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -85,7 +86,7 @@ class QuizSettings(Base):
 
 
 class FontReference(Base):
-    """An administrator-maintained public font comparison image."""
+    """An administrator-maintained public font comparison card."""
 
     __tablename__ = "font_references"
 
@@ -93,6 +94,7 @@ class FontReference(Base):
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     note: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

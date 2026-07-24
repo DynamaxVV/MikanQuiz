@@ -16,7 +16,7 @@ const navItems = [
   { label: '新增题目', to: '/admin/questions/new' },
   { label: '出题策略', to: '/admin/strategy' },
   { label: '字体快捷项', to: '/admin/font-presets' },
-  { label: '字体对照表', to: '/admin/font-references' },
+  { label: '字形教程', to: '/admin/font-references' },
 ];
 const activePath = computed(() => route.path);
 

@@ -5,11 +5,13 @@ import BrandHeader from '@/components/BrandHeader.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import QuestionMedia from '@/components/QuestionMedia.vue';
 import { useAttempt } from '@/composables/useAttempt';
+import { useFontRendering } from '@/composables/useFontRendering';
 import type { AnswerKey } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
 const { attempt, answers, error, loading, submitting, completed, clearSavedAttempt, restore, selectAnswer, submit } = useAttempt();
+const { fontStyle } = useFontRendering();
 const currentIndex = ref(0);
 const missingNotice = ref('');
 const displayName = computed(() => localStorage.getItem('hanzipen-display-name')?.trim() ?? '');
@@ -88,7 +90,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" />
           </section>
           <section class="answer-panel" aria-label="答案选项">
-            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :class="{ selected: answers[currentQuestion.id] === option.id }" @click="choose(option.id)">{{ option.name }}</button></section></div>
+            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontStyle(option)" :class="{ selected: answers[currentQuestion.id] === option.id }" @click="choose(option.id)">{{ option.name }}</button></section></div>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>
             <p v-if="error" class="status-error" role="alert">{{ error }}</p>
             <div class="question-navigation">
@@ -125,9 +127,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .quiz-media :deep(.image-button) { height: min(42vh, 360px); }
 .answer-panel { position: sticky; top: 18px; align-self: start; padding: 8px 0; }
 .answers { display: grid; gap: 12px; }
-.option-group { padding: 16px; border: 1px solid var(--color-border); border-radius: 16px; background: #fffdf9; }
-.option-group h2 { margin: 0 0 10px; color: #85451e; font-size: 17px; }
-.option-group button { margin: 0 8px 8px 0; border: 1px solid transparent; border-radius: 999px; padding: 8px 12px; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; }
+.option-group { padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 16px; background: #fffdf9; }
+.option-group h2 { margin: 0 0 6px; color: #85451e; font-size: 17px; }
+.option-group button { display: inline-flex; align-items: center; justify-content: center; margin: 0 8px 8px 0; border: 1px solid transparent; border-radius: 12px; padding: 0 9px; height: 42px; line-height: 1; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; }
 .option-group button:hover { border-color: #edcfac; color: #85451e; background: #fff8ed; }
 .option-group button.selected { border-color: #d58a45; color: #85451e; background: #fff0d8; }
 .option-group button:focus-visible { outline: 3px solid rgba(213, 138, 69, .3); outline-offset: 2px; }

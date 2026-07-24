@@ -13,7 +13,7 @@
 - Web 和小程序都提供匿名答题；昵称可选，不注册账号。
 - 同一设备可在 24 小时内恢复未完成答题；提交后不可重复提交。
 - Web 完整覆盖昵称、难度选择、答题、评分、错题解析和全部管理功能。
-- Web 新增管理员维护的“字体对照表”；小程序暂不增加。
+- Web 新增管理员维护的"字形教程"；小程序暂不增加。
 - 管理员有多个独立账号、权限相同；小程序和 Web 使用同一组账号密码。
 - 管理员账号只通过服务器命令新增、改密、停用和恢复，不提供后台账号管理页面。
 - 题目在 PC Web 上逐题录入，不做 Excel/ZIP 批量导入。
@@ -249,60 +249,7 @@ GET    /api/v1/admin/submissions?page=&display_name=&from=&to=
 GET    /api/v1/admin/submissions/{id}
 ```
 
-字体对照表由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。
-
-## 9. SQLite 配置
-
-应用启动时确认：
-
-```sql
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 5000;
-PRAGMA synchronous = NORMAL;
-```
-
-- 数据库文件必须位于香港服务器本地持久磁盘，不能直接放 OSS、NFS 或其他网络文件系统。
-- Uvicorn 首版只运行一个 worker；10 人并发不需要多 worker。
-- 每个请求使用短事务，绝不在等待外部图床响应时持有写事务。
-- 数据库 schema 只通过 Alembic 迁移，不由应用启动时自动 `create_all` 修改生产结构。
-- 如未来确实需要多应用实例或持续高写入，再通过 SQLAlchemy/Alembic 迁移到 PostgreSQL；不提前为此引入兼容层。
-
-## 10. 安全与反滥用
-
-### 10.1 Trust boundaries
-
-- Pydantic 验证所有请求体长度、枚举、数字范围和 URL scheme；数据库约束作为第二道边界。
-- 题目 API 永不返回答案和解析。
-- 管理端图片 URL 首版只允许 HTTPS；确认图床规则后优先限制到允许域名。
-- 后端不为普通展示主动抓取任意管理员 URL，避免 SSRF；迁移校验脚本使用独立 allowlist、超时和私网地址拒绝。
-- Nginx 设置请求体大小和超时上限；当前没有文件直传 API。
-
-### 10.2 Rate limiting
-
-使用 Nginx `limit_req` 的漏桶限流，不引入 Redis。初始值作为部署起点，按实际日志调整：
-
-| Endpoint group | Initial limit |
-| --- | --- |
-| 创建/恢复答题 | 每真实 IP 平均 30 次/分钟，允许短时 burst 10 |
-| 提交答案 | 每真实 IP 平均 20 次/分钟，允许短时 burst 10 |
-| 管理员登录 | 每真实 IP 平均 5 次/分钟，允许短时 burst 5 |
-
-组织网络可能共享公网 IP，因此不能设置成“一 IP 一分钟一次”。后端再通过 attempt 一次性提交、登录失败退避和会话撤销提供业务层保护。[Nginx `limit_req` 文档](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html)
-
-IP 只出现在短期 Nginx/安全日志中，按周期轮换；不写入题目、attempt、submission 或 admin 业务表。
-
-### 10.3 Browser policy
-
-- Web 与 API 同源，默认不开宽泛 CORS。
-- 设置 CSP，至少限制 `default-src 'self'`，并把 `img-src` 明确增加图床域名。
-- 设置 `X-Content-Type-Options: nosniff`、合适的 `Referrer-Policy` 和 frame 限制。
-- 管理页面响应不允许公共缓存；公开静态带 hash 资源可长期缓存。
-
-## 11. 图片方案
-
-- 新数据字段统一为 `image_url`。
-- 管理端通过认证后的图片上传接口提交文件；FastAPI 使用服务器环境变量中的 Cloudflare R2 凭据，经 AWS SDK v3 PUT 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
+字形教程卡片由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增、`PATCH /api/v1/admin/font-references/{id}` 更新，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
 - 后端以随机对象名写入配置目录，并返回由 `QUIZ_IMAGE_PUBLIC_BASE_URL` 组成的公开 HTTPS URL；管理表单自动填入并即时预览。
 - Web 和小程序直接请求该公开直链；后端不代传图片，也不提供匿名文件上传 API。
 - 当前不处理旧云存储图片，也不建立 `old_image_file_id -> new_image_url` 映射；恢复迁移时再单独制作并校验映射。
@@ -403,7 +350,7 @@ npm --prefix web/frontend run build
 - Web：首页 → 选难度 → 答完 → 提交 → 查看错题 → 再答一次。
 - Web：刷新后恢复 24 小时内未完成 attempt；已提交 attempt 不重复写记录。
 - Web：管理员登录、题目 CRUD、策略、字体快捷项、分页提交记录。
-- Web：字体对照表、图片放大、图片失败状态。
+- Web：字形教程、图片放大、图片失败状态。
 - 小程序：同一后端上的公开答题和账号密码管理登录。
 - Network：备案域名、TLS 证书链、真实 IP 转发、限流响应和图床可达性。
 - Backup：生成快照、上传 OSS，并从该对象恢复到临时库。
@@ -420,7 +367,7 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 
 ### Stage 2 — PC Web
 
-- 按 `DESIGN.md` 实现公开答题、管理端和静态字体对照表。
+- 按 `DESIGN.md` 实现公开答题、管理端和字形教程卡片。
 - 结果门槛：构建通过；1440px/1024px/键盘/减少动态效果的视觉与功能验收通过。
 
 ### Stage 3 — Mini Program adapter
@@ -443,7 +390,7 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 
 - 坚果云公开直链的稳定格式、是否存在登录/防盗链限制，以及 Web 与小程序真机可达性。
 - 正式域名、中转服务器地址、真实 IP header 约定和 TLS 终止位置。
-- 字体对照表首批静态图片清单。
+- 字形教程首批静态图片清单。
 - 阿里云 OSS bucket、凭证注入方式和生命周期策略。
 
 这些事项不得通过硬编码 R2 密钥或猜测 URL 格式绕过；实现应保留明确配置点，并在正式迁移或生产部署前完成验证。

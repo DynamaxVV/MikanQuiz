@@ -7,6 +7,7 @@ import logging
 from time import perf_counter
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Cookie, Depends, File, Header, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +27,7 @@ from app.schemas import (
     AttemptCurrent,
     AttemptSubmit,
     FontReferenceResponse,
+    FontReferenceUpdate,
     FontReferenceWrite,
     OptionCatalogUpdate,
     OptionGroupResponse,
@@ -113,13 +115,36 @@ def public_settings(session: Session = Depends(get_session)) -> SettingsResponse
     return settings_response(question_service.get_settings(session))
 
 
+@router.get("/fonts/stream")
+async def stream_font(
+    url: str = Query(...),
+    settings: AppSettings = Depends(get_app_settings),
+) -> Response:
+    """Proxy a font file from R2 with CORS headers so @font-face can load cross-origin."""
+    base = settings.r2_public_base_url.rstrip("/")
+    if not url.startswith(base + "/") and url != base:
+        raise ApiError(400, "INVALID_FONT_URL", "字体地址无效")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(url)
+        content_type = resp.headers.get("content-type", "font/ttf")
+        return Response(
+            content=resp.content,
+            media_type=content_type,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=31536000, immutable",
+            },
+        )
+
+
 def font_reference_response(item: FontReference) -> FontReferenceResponse:
-    """Serialize a persisted comparison image for public and admin clients."""
+    """Serialize a persisted comparison card for public and admin clients."""
     return FontReferenceResponse(
         id=item.id,
         title=item.title,
         image_url=item.image_url,
         note=item.note,
+        difficulty=item.difficulty,
         created_at=as_utc(item.created_at),
     )
 
@@ -128,7 +153,7 @@ def font_reference_response(item: FontReference) -> FontReferenceResponse:
 def list_font_references(
     session: Session = Depends(get_session),
 ) -> list[FontReferenceResponse]:
-    """Return public font comparison images in stable creation order."""
+    """Return public font comparison cards in stable creation order."""
     items = session.scalars(
         select(FontReference).order_by(FontReference.created_at.desc(), FontReference.id.desc())
     ).all()
@@ -370,6 +395,39 @@ async def upload_admin_image(
     return ImageUploadResponse(image_url=image_url)
 
 
+@router.post("/admin/fonts", response_model=ImageUploadResponse, status_code=201)
+async def upload_admin_font(
+    font: UploadFile = File(...),
+    auth: AdminAuth = Depends(require_admin),
+    settings: AppSettings = Depends(get_app_settings),
+) -> ImageUploadResponse:
+    """Upload a font file (TTF/OTF/WOFF/WOFF2) through the R2 adapter."""
+    content = await font.read(image_service.MAX_FONT_BYTES + 1)
+    content_type = font.content_type or ""
+    started_at = perf_counter()
+    try:
+        font_url = image_service.upload_font(settings, content, content_type, font.filename or "font")
+    except ApiError as error:
+        log_event(
+            "r2_font_upload_failed",
+            logging.WARNING,
+            admin_username=auth.admin.username,
+            content_type=content_type,
+            byte_count=len(content),
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            error_code=error.code,
+        )
+        raise
+    log_event(
+        "r2_font_upload_succeeded",
+        admin_username=auth.admin.username,
+        content_type=content_type,
+        byte_count=len(content),
+        duration_ms=round((perf_counter() - started_at) * 1000, 2),
+    )
+    return ImageUploadResponse(image_url=font_url)
+
+
 @router.post(
     "/admin/font-references",
     response_model=FontReferenceResponse,
@@ -380,13 +438,45 @@ def create_font_reference(
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> FontReferenceResponse:
-    """Create one public comparison image after administrator upload."""
-    item = FontReference(title=data.title, image_url=data.image_url, note=data.note)
+    """Create one public comparison card after administrator upload."""
+    item = FontReference(title=data.title, image_url=data.image_url, note=data.note, difficulty=data.difficulty)
     session.add(item)
     session.commit()
     session.refresh(item)
     log_event(
         "font_reference_created",
+        admin_username=auth.admin.username,
+        reference_id=item.id,
+    )
+    return font_reference_response(item)
+
+
+@router.patch(
+    "/admin/font-references/{reference_id}",
+    response_model=FontReferenceResponse,
+)
+def update_font_reference(
+    reference_id: int,
+    data: FontReferenceUpdate,
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> FontReferenceResponse:
+    """Update one comparison card's fields."""
+    item = session.get(FontReference, reference_id)
+    if item is None:
+        raise ApiError(404, "FONT_REFERENCE_NOT_FOUND", "字体对照图不存在")
+    if data.title is not None:
+        item.title = data.title
+    if data.image_url is not None:
+        item.image_url = data.image_url
+    if data.note is not None:
+        item.note = data.note
+    if data.difficulty is not None:
+        item.difficulty = data.difficulty
+    session.commit()
+    session.refresh(item)
+    log_event(
+        "font_reference_updated",
         admin_username=auth.admin.username,
         reference_id=item.id,
     )
@@ -545,16 +635,81 @@ def get_option_catalog(
     return catalogue(session)
 
 
+def _collect_font_urls(session: Session) -> set[str]:
+    """Collect every non-null font_url currently in the database."""
+    rows = session.execute(select(FontOption.font_url).where(FontOption.font_url.isnot(None))).all()
+    return {row[0] for row in rows if row[0]}
+
+
 @router.put("/admin/option-groups", response_model=list[OptionGroupResponse])
 def put_option_catalog(
     data: OptionCatalogUpdate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> list[OptionGroupResponse]:
     """Save groups and options independently from draw strategy settings."""
+    old_urls = _collect_font_urls(session)
     question_service.replace_option_catalog(session, data)
+    new_urls = _collect_font_urls(session)
+    orphaned = old_urls - new_urls
+    for url in orphaned:
+        image_service.delete_r2_object(settings, url)
     log_event(
         "option_catalog_replaced",
+        admin_username=auth.admin.username,
+        group_count=len(data.groups),
+        option_count=sum(len(group.options) for group in data.groups),
+    )
+    return catalogue(session)
+
+
+@router.get("/admin/option-groups/export")
+def export_option_catalog(
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Export the complete font catalogue including font_url as a downloadable JSON file."""
+    groups = catalogue(session)
+    payload = {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "groups": [
+            {
+                "name": g.name,
+                "sort_order": g.sort_order,
+                "options": [
+                    {"name": o.name, "minimum_difficulty": o.minimum_difficulty, "sort_order": o.sort_order, "font_url": o.font_url}
+                    for o in g.options
+                ],
+            }
+            for g in groups
+        ],
+    }
+    json_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    log_event(
+        "option_catalog_exported",
+        admin_username=auth.admin.username,
+        group_count=len(groups),
+        option_count=sum(len(g.options) for g in groups),
+    )
+    return Response(
+        content=json_bytes,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=font-catalog.json"},
+    )
+
+
+@router.post("/admin/option-groups/import", response_model=list[OptionGroupResponse])
+def import_option_catalog(
+    data: OptionCatalogUpdate,
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> list[OptionGroupResponse]:
+    """Import a font catalogue from an exported JSON file."""
+    question_service.replace_option_catalog(session, data)
+    log_event(
+        "option_catalog_imported",
         admin_username=auth.admin.username,
         group_count=len(data.groups),
         option_count=sum(len(group.options) for group in data.groups),
