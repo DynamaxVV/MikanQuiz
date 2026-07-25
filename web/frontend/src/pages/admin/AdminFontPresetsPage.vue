@@ -64,7 +64,7 @@ function uploadFontFile(option: FontOption): void {
     uploadingFontFor.value = option.id || option.name || '__new__';
     fontUploadProgress.value = 0;
     api.uploadFont(file, (pct) => { fontUploadProgress.value = pct; })
-      .then((url) => { option.fontUrl = url; ElMessage.success('字体文件已上传'); })
+      .then((url) => { option.fontUrl = url; ElMessage.success('字体文件已上传'); void save(); })
       .catch((caught) => { ElMessage.error(caught instanceof Error ? caught.message : '字体上传失败'); })
       .finally(() => { uploadingFontFor.value = ''; fontUploadProgress.value = 0; });
   };

@@ -6,7 +6,7 @@ import ErrorPanel from '@/components/ErrorPanel.vue';
 import QuestionMedia from '@/components/QuestionMedia.vue';
 import { useAttempt } from '@/composables/useAttempt';
 import { useFontRendering } from '@/composables/useFontRendering';
-import type { AnswerKey } from '@/types';
+import type { AnswerKey, FontOption } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,6 +19,54 @@ const currentQuestion = computed(() => attempt.value?.questions[currentIndex.val
 const total = computed(() => attempt.value?.questions.length ?? 0);
 const answeredCount = computed(() => Object.keys(answers.value).length);
 const modeLabel = computed(() => ({ beginner: '新手级', proficient: '熟练级', challenge: '挑战级' }[attempt.value?.mode ?? 'beginner']));
+
+const fontRenderEnabled = ref(localStorage.getItem('hanzipen-font-render') === '1');
+function toggleFontRender(): void {
+  fontRenderEnabled.value = !fontRenderEnabled.value;
+  localStorage.setItem('hanzipen-font-render', fontRenderEnabled.value ? '1' : '0');
+}
+
+const previewFont = ref<FontOption | null>(null);
+const previewAbove = ref(false);
+const previewLeft = ref(0);
+const previewBottom = ref(0);
+const previewTop = ref(0);
+let pressTimer: ReturnType<typeof setTimeout> | null = null;
+let didLongPress = false;
+
+function onOptionPointerDown(option: FontOption, event: PointerEvent): void {
+  if (!option.fontUrl) return;
+  didLongPress = false;
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const above = rect.top > window.innerHeight / 2;
+  pressTimer = setTimeout(() => {
+    didLongPress = true;
+    previewAbove.value = above;
+    previewLeft.value = rect.left + rect.width / 2;
+    if (above) {
+      previewBottom.value = window.innerHeight - rect.top;
+    } else {
+      previewTop.value = rect.bottom;
+    }
+    previewFont.value = option;
+  }, 500);
+}
+
+function onOptionPointerUp(): void {
+  if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  previewFont.value = null;
+}
+
+function onOptionPointerLeave(): void {
+  if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  previewFont.value = null;
+}
+
+function chooseWithGuard(optionId: string): void {
+  if (didLongPress) return;
+  choose(optionId);
+}
+
 
 function previous(): void { currentIndex.value = Math.max(0, currentIndex.value - 1); missingNotice.value = ''; }
 function next(): void { currentIndex.value = Math.min(total.value - 1, currentIndex.value + 1); missingNotice.value = ''; }
@@ -90,7 +138,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" />
           </section>
           <section class="answer-panel" aria-label="答案选项">
-            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontStyle(option)" :class="{ selected: answers[currentQuestion.id] === option.id }" @click="choose(option.id)">{{ option.name }}</button></section></div>
+            <label class="font-render-toggle">
+              <span class="toggle-label">即时渲染字体</span>
+              <span class="toggle-track" :class="{ on: fontRenderEnabled }" @click.prevent="toggleFontRender" @keydown.enter.prevent="toggleFontRender" @keydown.space.prevent="toggleFontRender" role="switch" :aria-checked="fontRenderEnabled" tabindex="0">
+                <span class="toggle-thumb"></span>
+              </span>
+            </label>
+            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
+            <p class="font-preview-tips">{{ fontRenderEnabled ? '字体即时渲染已开启' : '长按字体选项可预览字体效果' }}</p>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>
             <p v-if="error" class="status-error" role="alert">{{ error }}</p>
             <div class="question-navigation">
@@ -109,6 +164,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
       </section>
     </div>
   </main>
+
+  <Teleport to="body">
+    <div
+      v-if="previewFont"
+      class="font-preview-tooltip"
+      :style="{
+        ...fontStyle(previewFont),
+        left: previewLeft + 'px',
+        fontSize: '200%',
+        ...(previewAbove ? { bottom: previewBottom + 'px' } : { top: previewTop + 'px' }),
+      }"
+    >{{ previewFont.name }}</div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -145,4 +213,58 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 @media (max-width: 1023px) { .quiz-layout { grid-template-columns: 1fr; }.answer-panel { position: static; }.progress { width: 160px; } }
 @media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); }.quiz-header { grid-template-columns: 1fr auto; padding: 10px 0; }.quiz-status { grid-row: 2; }.progress { grid-row: 2; width: 120px; }.question-panel { padding: 20px; }.quiz-layout { padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .progress span { transition: none; } }
+
+.font-preview-tips { margin: 10px 0 0; color: var(--color-text-muted); font-size: 12px; text-align: center; }
+
+.font-render-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-label { color: var(--color-text-muted); font-size: 12px; font-weight: 650; }
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #e3d7c7;
+  cursor: pointer;
+  transition: background 160ms ease-out;
+  outline: none;
+}
+.toggle-track:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.toggle-track.on { background: var(--color-action); }
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(73, 48, 26, 0.16);
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toggle-track.on .toggle-thumb { transform: translateX(18px); }
+
+.font-preview-tooltip {
+  position: fixed;
+  z-index: 200;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 14px;
+  color: #fff;
+  background: rgba(73, 48, 26, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(73, 48, 26, 0.18);
+}
 </style>

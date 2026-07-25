@@ -94,11 +94,13 @@ def upload_font(settings: AppSettings, content: bytes, content_type: str, filena
 
 
 def validate_font(content: bytes, content_type: str) -> str:
-    """Reject oversized, unsupported, or malformed font file uploads."""
-    allowed = ALLOWED_FONTS.get(content_type.lower())
-    if allowed is None or len(content) > MAX_FONT_BYTES or not content.startswith(allowed[1]):
+    """Reject oversized or malformed font files. Format detected by magic bytes, not Content-Type."""
+    if len(content) > MAX_FONT_BYTES:
         raise ApiError(422, "INVALID_FONT", "仅支持 20MB 以内的 TTF、OTF、WOFF 或 WOFF2 字体文件")
-    return allowed[0]
+    for suffix, magic in ALLOWED_FONTS.values():
+        if content.startswith(magic):
+            return suffix
+    raise ApiError(422, "INVALID_FONT", "仅支持 TTF、OTF、WOFF 或 WOFF2 字体文件")
 
 
 def _safe_filename(filename: str) -> str:

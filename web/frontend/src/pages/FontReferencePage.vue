@@ -135,7 +135,7 @@ onMounted(loadReferences);
 
 .card-body { display: flex; gap: 16px; padding: 16px 20px 20px; }
 .card-body img { width: 140px; height: 100px; object-fit: cover; border-radius: 10px; flex-shrink: 0; background: var(--color-surface-warm); }
-.card-body p { margin: 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.65; }
+.card-body p { margin: 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
 
 /* Lightbox */
 .lightbox-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 32px; }
@@ -145,7 +145,7 @@ onMounted(loadReferences);
 .lightbox-card .card-head .card-stars { font-size: 18px; }
 .lightbox-card .card-body { padding: 24px 32px 32px; gap: 24px; }
 .lightbox-card .card-body img { width: 352px; height: auto; max-height: 55vh; object-fit: contain; border-radius: 14px; }
-.lightbox-card .card-body p { font-size: 16px; }
+.lightbox-card .card-body p { font-size: 16px; white-space: pre-wrap; }
 
 /* Transition */
 .lightbox-enter-active { transition: opacity 240ms ease-out; }
