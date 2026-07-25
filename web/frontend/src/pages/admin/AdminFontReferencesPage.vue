@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '@/api/client';
 import AdminShell from '@/components/AdminShell.vue';
@@ -10,12 +10,19 @@ const references = ref<FontReference[]>([]);
 const title = ref('');
 const note = ref('');
 const imageUrl = ref('');
+const pendingImageFile = ref<File | null>(null);
 const difficulty = ref(1);
 const loading = ref(true);
 const uploading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const editId = ref('');
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+const previewUrl = computed(() => {
+  if (pendingImageFile.value) return URL.createObjectURL(pendingImageFile.value);
+  return imageUrl.value;
+});
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -26,49 +33,89 @@ async function load(): Promise<void> {
 }
 
 function resetForm(): void {
+  if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value);
   title.value = '';
   note.value = '';
   imageUrl.value = '';
+  pendingImageFile.value = null;
   difficulty.value = 1;
   editId.value = '';
   error.value = '';
 }
 
+function setLocalImage(file: File): void {
+  if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value);
+  pendingImageFile.value = file;
+}
+
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+async function onImageInput(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!ACCEPTED_TYPES.includes(file.type)) {
+    error.value = '仅支持 JPEG、PNG、GIF、WebP 格式的图片';
+    return;
+  }
+  setLocalImage(file);
+  input.value = '';
+}
+
+function onPaste(event: ClipboardEvent): void {
+  const items = event.clipboardData?.items;
+  if (!items || saving.value) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      if (!ACCEPTED_TYPES.includes(blob.type)) {
+        error.value = '仅支持 JPEG、PNG、GIF、WebP 格式的图片';
+        continue;
+      }
+      event.preventDefault();
+      const ext = blob.type.split('/')[1] || 'png';
+      setLocalImage(new File([blob], `clipboard.${ext}`, { type: blob.type }));
+      return;
+    }
+  }
+}
+
 function startEdit(item: FontReference): void {
+  if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value);
   editId.value = item.id;
   title.value = item.title;
   note.value = item.note;
   imageUrl.value = item.imageUrl;
+  pendingImageFile.value = null;
   difficulty.value = item.difficulty;
   error.value = '';
 }
 
-async function upload(event: Event): Promise<void> {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  uploading.value = true;
-  error.value = '';
-  try {
-    imageUrl.value = await api.uploadImage(file);
-    ElMessage.success('图片已上传');
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : '图片上传失败。';
-  } finally { uploading.value = false; }
-}
-
 async function save(): Promise<void> {
-  if (!title.value.trim() || !imageUrl.value) {
-    error.value = '请填写标题并上传图片。';
+  if (!title.value.trim()) {
+    error.value = '请填写标题。';
+    return;
+  }
+  if (!imageUrl.value && !pendingImageFile.value) {
+    error.value = '请选择或粘贴图片。';
     return;
   }
   saving.value = true;
   error.value = '';
   try {
+    let finalUrl = imageUrl.value;
+    if (pendingImageFile.value) {
+      uploading.value = true;
+      finalUrl = await api.uploadImage(pendingImageFile.value);
+      uploading.value = false;
+    }
+    if (!finalUrl) throw new Error('图片上传失败');
     if (editId.value) {
       const updated = await api.updateFontReference(editId.value, {
         title: title.value,
         note: note.value,
-        imageUrl: imageUrl.value,
+        imageUrl: finalUrl,
         difficulty: difficulty.value,
       });
       const idx = references.value.findIndex((r) => r.id === editId.value);
@@ -78,7 +125,7 @@ async function save(): Promise<void> {
       const item = await api.createFontReference({
         title: title.value,
         note: note.value,
-        imageUrl: imageUrl.value,
+        imageUrl: finalUrl,
         difficulty: difficulty.value,
       });
       references.value = [item, ...references.value];
@@ -87,7 +134,7 @@ async function save(): Promise<void> {
     resetForm();
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '保存失败。';
-  } finally { saving.value = false; }
+  } finally { saving.value = false; uploading.value = false; }
 }
 
 async function remove(item: FontReference): Promise<void> {
@@ -104,7 +151,8 @@ async function remove(item: FontReference): Promise<void> {
 
 function stars(count: number): string { return '★'.repeat(count) + '☆'.repeat(3 - count); }
 
-onMounted(load);
+onMounted(() => { void load(); document.addEventListener('paste', onPaste); });
+onBeforeUnmount(() => { document.removeEventListener('paste', onPaste); if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value); });
 </script>
 
 <template>
@@ -131,11 +179,19 @@ onMounted(load);
             </div>
           </label>
 
-          <label>图片
-            <input accept="image/jpeg,image/png,image/gif,image/webp" type="file" :disabled="uploading" @change="upload" />
-            <small>{{ uploading ? '正在上传图片…' : imageUrl ? '图片已上传。' : '支持 JPG、PNG、GIF、WebP，最大 8MB。' }}</small>
-          </label>
-          <img v-if="imageUrl" class="preview" :src="imageUrl" alt="待发布的卡片预览" />
+          <label>图片</label>
+          <div class="upload-zone" tabindex="0" role="button" :class="{ saving }" :aria-label="'点击选择或粘贴图片'" @click="() => fileInputRef?.click()" @keydown.enter.prevent="() => fileInputRef?.click()" @keydown.space.prevent="() => fileInputRef?.click()" @paste.prevent="onPaste">
+            <input ref="fileInputRef" accept="image/jpeg,image/png,image/gif,image/webp" type="file" :disabled="saving" @change="onImageInput" hidden />
+            <template v-if="previewUrl">
+              <img :src="previewUrl" alt="卡片图片预览" />
+              <small>{{ pendingImageFile ? '待上传，保存时将提交到服务器' : '已上传，点击或粘贴重新选择' }}</small>
+            </template>
+            <template v-else>
+              <svg class="upload-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>点击选择图片 或 Ctrl+V 粘贴</span>
+              <small>支持 JPEG、PNG、GIF、WebP</small>
+            </template>
+          </div>
 
           <label>说明（可选）<textarea v-model="note" maxlength="500" rows="3" placeholder="描述这张卡片对应的字形特征或适用场景" /></label>
 
@@ -180,7 +236,13 @@ onMounted(load);
 .difficulty-picker { display: flex; gap: 6px; }
 .difficulty-picker button { border: 0; padding: 0; background: transparent; color: #dfd2c4; font-size: 30px; line-height: 1; cursor: pointer; }
 .difficulty-picker button.active { color: #ff9800; }
-.preview { width: min(100%, 640px); max-height: 300px; object-fit: contain; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-warm); }
+.upload-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 140px; border: 2px dashed #dcc6ae; border-radius: 12px; padding: 16px; cursor: pointer; color: var(--color-text-muted); font-size: 13px; font-weight: 600; background: #fff8ed; transition: border-color 150ms, background 150ms; outline: none; }
+.upload-zone:hover { border-color: #c4a888; background: #fff3e0; }
+.upload-zone:focus-visible { border-color: var(--color-action); box-shadow: 0 0 0 3px rgba(169, 79, 31, .15); }
+.upload-zone .upload-icon { opacity: .6; }
+.upload-zone img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; }
+.upload-zone.saving { opacity: .55; pointer-events: none; }
+.upload-zone small { font-weight: 400; }
 .form-actions { display: flex; gap: 12px; align-items: center; }
 .publish { min-height: 44px; border: 0; border-radius: var(--radius-button); padding: 0 18px; color: #fff; background: var(--color-action); font-weight: 750; cursor: pointer; }
 .publish:disabled { opacity: .65; }
