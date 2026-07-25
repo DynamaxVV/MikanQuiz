@@ -27,7 +27,7 @@ function beginQuiz(): void {
             <span aria-hidden="true">→</span>
           </button>
           <RouterLink class="action-card reference-card" to="/font-reference">
-            <span><strong>嵌字笔记</strong><small>探索汉字书写的形态特征</small></span>
+            <span><strong>嵌字笔记</strong><small>砂糖的小本本~</small></span>
             <span aria-hidden="true">→</span>
           </RouterLink>
           <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>

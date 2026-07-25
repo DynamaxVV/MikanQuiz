@@ -52,7 +52,7 @@ onMounted(loadReferences);
       <BrandHeader />
       <section aria-labelledby="font-reference-title">
         <h1 id="font-reference-title" class="page-title">嵌字笔记</h1>
-        <p class="page-description">探索汉字书写的形态特征</p>
+        <p class="page-description">砂糖的小本本~</p>
 
         <p v-if="loading" class="loading-state">正在加载…</p>
         <ErrorPanel v-else-if="error" :message="error" @retry="loadReferences" />
