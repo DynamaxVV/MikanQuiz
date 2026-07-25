@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { nextTick, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, ElPagination, ElTable, ElTableColumn } from 'element-plus';
 import { api } from '@/api/client';
@@ -21,17 +21,6 @@ const importFileRef = ref<HTMLInputElement | null>(null);
 const tableRef = ref<{ sort: (prop: string, order: string) => void } | null>(null);
 const stats = ref<QuestionStats | null>(null);
 const sortBy = ref('updated_at');
-
-const fontStatsByDifficulty = computed(() => {
-  if (!stats.value) return [];
-  const grouped = new Map<number, { optionName: string; count: number }[]>();
-  for (const f of stats.value.byFont) {
-    const arr = grouped.get(f.minimumDifficulty) ?? [];
-    arr.push({ optionName: f.optionName, count: f.count });
-    grouped.set(f.minimumDifficulty, arr);
-  }
-  return [...grouped.entries()].sort((a, b) => a[0] - b[0]).map(([difficulty, fonts]) => ({ difficulty, fonts }));
-});
 const sortOrder = ref('asc');
 
 const defaultSort = ref<{ prop: string; order: 'ascending' | 'descending' }>({ prop: 'updatedAt', order: 'ascending' });
@@ -183,13 +172,10 @@ onMounted(async () => {
           </div>
           <div class="stats-section">
             <h3 class="stats-subtitle">按正确字体</h3>
-            <div v-for="(group, gi) in fontStatsByDifficulty" :key="group.difficulty" class="font-diff-group" :class="{ 'has-divider': gi > 0 }">
-              <div class="font-diff-label">最低 {{ '★'.repeat(group.difficulty) }}</div>
-              <div class="font-cards">
-                <div v-for="f in group.fonts" :key="f.optionName" class="font-stat-card">
-                  <span class="font-stat-name">{{ f.optionName }}</span>
-                  <span class="font-stat-count">{{ f.count }}</span>
-                </div>
+            <div class="font-cards">
+              <div v-for="f in stats.byFont" :key="f.optionId" class="font-stat-card">
+                <span class="font-stat-name">{{ f.optionName }}</span>
+                <span class="font-stat-count">{{ f.count }}</span>
               </div>
             </div>
           </div>
@@ -200,7 +186,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.admin-content { width: min(1440px, calc(100% - 64px)); margin: 0 auto; padding: 48px 0 64px; }.page-header { margin-bottom: 28px; }.page-description { margin-bottom: 0; }.toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding: 16px; color: var(--color-text-muted); font-size: 13px; font-weight: 700; }.difficulty-tags { display: flex; flex-wrap: wrap; gap: 8px; }.difficulty-tags button { min-height: 34px; border: 1px solid var(--color-border); border-radius: 999px; padding: 0 12px; color: #b9aa99; background: var(--color-surface-warm); font-size: 14px; letter-spacing: 1px; }.difficulty-tags button.selected { border-color: #ebcfad; color: var(--color-action); background: var(--color-surface-accent); }.toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }.action-link { border: 0; padding: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 12px; cursor: pointer; }.action-link:hover { color: var(--color-action); }.action-sep { color: var(--color-border); font-size: 12px; }.loading { padding: 32px; color: var(--color-text-muted); }.table-card { overflow: hidden; }.thumbnail { display: block; width: 54px; height: 40px; object-fit: cover; border-radius: 7px; }.no-image { color: var(--color-text-muted); font-size: 13px; }.row-actions { display: flex; gap: 12px; }.row-actions a { color: var(--color-action); font-weight: 700; }.row-actions button { border: 0; padding: 0; color: var(--color-danger); background: transparent; font-weight: 700; }.pagination { justify-content: flex-end; margin-top: 22px; }.stats-card { margin-top: 20px; padding: 24px; }.stats-title { margin: 0 0 20px; font-size: 18px; }.stats-body { display: grid; gap: 24px; }.stats-subtitle { margin: 0 0 12px; font-size: 14px; color: var(--color-text-muted); }.difficulty-stats { display: flex; gap: 24px; }.stat-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 80px; padding: 12px 16px; border-radius: 10px; background: var(--color-surface-warm); }.stat-label { color: var(--color-action); font-size: 16px; letter-spacing: 2px; }.stat-value { font-size: 22px; font-weight: 700; }.font-diff-group { margin-bottom: 16px; }.font-diff-group:last-child { margin-bottom: 0; }.font-diff-group.has-divider { padding-top: 16px; border-top: 1px solid var(--color-border); }.font-diff-label { margin-bottom: 8px; font-size: 14px; color: var(--color-action); letter-spacing: 2px; }.font-cards { display: flex; flex-wrap: wrap; gap: 10px; }.font-stat-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 72px; padding: 10px 14px; border-radius: 10px; background: var(--color-surface-warm); }.font-stat-name { font-size: 13px; color: var(--color-text-muted); }.font-stat-count { font-size: 20px; font-weight: 700; }
+.admin-content { width: min(1440px, calc(100% - 64px)); margin: 0 auto; padding: 48px 0 64px; }.page-header { margin-bottom: 28px; }.page-description { margin-bottom: 0; }.toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding: 16px; color: var(--color-text-muted); font-size: 13px; font-weight: 700; }.difficulty-tags { display: flex; flex-wrap: wrap; gap: 8px; }.difficulty-tags button { min-height: 34px; border: 1px solid var(--color-border); border-radius: 999px; padding: 0 12px; color: #b9aa99; background: var(--color-surface-warm); font-size: 14px; letter-spacing: 1px; }.difficulty-tags button.selected { border-color: #ebcfad; color: var(--color-action); background: var(--color-surface-accent); }.toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }.action-link { border: 0; padding: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 12px; cursor: pointer; }.action-link:hover { color: var(--color-action); }.action-sep { color: var(--color-border); font-size: 12px; }.loading { padding: 32px; color: var(--color-text-muted); }.table-card { overflow: hidden; }.thumbnail { display: block; width: 54px; height: 40px; object-fit: cover; border-radius: 7px; }.no-image { color: var(--color-text-muted); font-size: 13px; }.row-actions { display: flex; gap: 12px; }.row-actions a { color: var(--color-action); font-weight: 700; }.row-actions button { border: 0; padding: 0; color: var(--color-danger); background: transparent; font-weight: 700; }.pagination { justify-content: flex-end; margin-top: 22px; }.stats-card { margin-top: 20px; padding: 24px; }.stats-title { margin: 0 0 20px; font-size: 18px; }.stats-body { display: grid; gap: 24px; }.stats-subtitle { margin: 0 0 12px; font-size: 14px; color: var(--color-text-muted); }.difficulty-stats { display: flex; gap: 24px; }.stat-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 80px; padding: 12px 16px; border-radius: 10px; background: var(--color-surface-warm); }.stat-label { color: var(--color-action); font-size: 16px; letter-spacing: 2px; }.stat-value { font-size: 22px; font-weight: 700; }.font-cards { display: flex; flex-wrap: wrap; gap: 10px; }.font-stat-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 72px; padding: 10px 14px; border-radius: 10px; background: var(--color-surface-warm); }.font-stat-name { font-size: 13px; color: var(--color-text-muted); }.font-stat-count { font-size: 20px; font-weight: 700; }
 @media (max-width: 1023px) { .admin-content { width: min(100% - 32px, 1440px); padding-top: 28px; }.table-card { overflow-x: auto; }.toolbar { flex-wrap: wrap; }.toolbar label { min-width: 200px; } }
 @media (max-width: 600px) { .page-header { display: grid; }.toolbar { align-items: stretch; flex-direction: column; }.toolbar label, .toolbar label:first-child { flex: 1 0 100%; }.primary-link { width: 100%; }.pagination { justify-content: center; } }
 </style>

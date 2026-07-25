@@ -84,7 +84,7 @@ export interface AdminSession {
 }
 
 export interface DifficultyStat { difficulty: number; count: number; }
-export interface FontStat { optionId: string; optionName: string; minimumDifficulty: number; count: number; }
+export interface FontStat { optionId: string; optionName: string; count: number; }
 export interface QuestionStats { total: number; byDifficulty: DifficultyStat[]; byFont: FontStat[]; }
 
 export interface QuestionPayload {
