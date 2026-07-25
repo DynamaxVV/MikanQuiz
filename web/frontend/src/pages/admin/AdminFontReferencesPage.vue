@@ -58,11 +58,13 @@ async function removeCard(section: FontReferenceSection, card: FontReference): P
   } catch { /* 用户取消 */ }
 }
 
-function cardDragStart(sectionIndex: number, cardIndex: number): void {
+function cardDragStart(event: DragEvent, sectionIndex: number, cardIndex: number): void {
+  event.stopPropagation();
   draggedCard.value = { sectionIndex, cardIndex };
 }
 
-function cardDrop(targetSectionIndex: number, targetCardIndex: number): void {
+function cardDrop(event: DragEvent, targetSectionIndex: number, targetCardIndex: number): void {
+  event.stopPropagation();
   if (!draggedCard.value) return;
   const { sectionIndex: srcSecIdx, cardIndex: srcCardIdx } = draggedCard.value;
   if (srcSecIdx === targetSectionIndex && srcCardIdx === targetCardIndex) return;
@@ -73,11 +75,14 @@ function cardDrop(targetSectionIndex: number, targetCardIndex: number): void {
   draggedCard.value = null;
 }
 
-function sectionDragStart(sectionIndex: number): void {
+function sectionDragStart(event: DragEvent, sectionIndex: number): void {
+  event.stopPropagation();
   draggedSection.value = sectionIndex;
 }
 
-function sectionDrop(targetIndex: number): void {
+function sectionDrop(event: DragEvent, targetIndex: number): void {
+  event.stopPropagation();
+  if (draggedCard.value) return;
   if (draggedSection.value === null || draggedSection.value === targetIndex) return;
   const [section] = sections.value.splice(draggedSection.value, 1);
   sections.value.splice(targetIndex, 0, section);
@@ -161,14 +166,12 @@ onMounted(() => { void load(); });
           :key="section.id || `new-${sectionIndex}`"
           class="section-card card"
           :class="{ dragging: draggedSection === sectionIndex }"
-          draggable="true"
-          @dragstart="sectionDragStart(sectionIndex)"
           @dragover.prevent
-          @drop="sectionDrop(sectionIndex)"
+          @drop="sectionDrop($event, sectionIndex)"
         >
           <header class="section-header">
-            <span class="drag-mark" title="拖动可调整分区顺序">⠿</span>
-            <label>分区名称<input v-model="section.name" maxlength="100" placeholder="例如：宋体类" /></label>
+            <span class="drag-mark" title="拖动可调整分区顺序" draggable="true" @dragstart="sectionDragStart($event, sectionIndex)">⠿</span>
+            <label>分区名称<input v-model="section.name" maxlength="100" placeholder="例如：笔画粗细对比" /></label>
             <button type="button" class="text-danger" @click="removeSection(section)">删除分区</button>
           </header>
           <div class="card-list">
@@ -176,12 +179,10 @@ onMounted(() => { void load(); });
               v-for="(card, cardIndex) in section.cards"
               :key="card.id || `new-${cardIndex}`"
               class="card-row"
-              draggable="true"
-              @dragstart="cardDragStart(sectionIndex, cardIndex)"
               @dragover.prevent
-              @drop="cardDrop(sectionIndex, cardIndex)"
+              @drop="cardDrop($event, sectionIndex, cardIndex)"
             >
-              <span class="drag-mark" title="拖动可在分区间移动或排序">⠿</span>
+              <span class="drag-mark" title="拖动可在分区间移动或排序" draggable="true" @dragstart="cardDragStart($event, sectionIndex, cardIndex)">⠿</span>
               <div class="card-preview" @click="(e: Event) => { const inp = (e.currentTarget as HTMLElement).querySelector('input') as HTMLInputElement; inp?.click(); }" @paste.prevent="(e: ClipboardEvent) => onPaste(e, card)">
                 <input
                   type="file"
@@ -198,8 +199,8 @@ onMounted(() => { void load(); });
                 </template>
               </div>
               <div class="card-fields">
-                <label>标题<input v-model="card.title" maxlength="100" placeholder="卡片标题" /></label>
-                <label>说明<textarea v-model="card.note" maxlength="500" rows="2" placeholder="描述文字（可选）" /></label>
+                <label>标题<input v-model="card.title" maxlength="100" placeholder="例如：细宋体笔画收尾" /></label>
+                <label>说明<textarea v-model="card.note" maxlength="500" rows="2" placeholder="笔记内容（可选）" /></label>
                 <label class="difficulty-label">难度
                   <div class="difficulty-picker">
                     <button v-for="star in 3" :key="star" type="button" :class="{ active: card.difficulty >= star }" @click="card.difficulty = star">{{ '★' }}</button>
@@ -231,18 +232,16 @@ onMounted(() => { void load(); });
 .catalog { display: grid; gap: 12px; }
 .section-card { padding: 0; overflow: hidden; }
 .section-card.dragging { opacity: .5; }
-.section-card[draggable=true] { cursor: grab; }
-.section-card:active { cursor: grabbing; }
 .section-header { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--color-surface-accent); border-bottom: 1px solid #efdbc1; }
-.section-header .drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; }
+.section-header .drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; cursor: grab; }
+.section-header .drag-mark:active { cursor: grabbing; }
 .section-header label { display: grid; gap: 5px; color: var(--color-text-muted); font-size: 12px; font-weight: 750; flex: 1; }
 .section-header input { width: 100%; border: 0; border-bottom: 1px solid #d8b789; padding: 5px 0; color: var(--color-text); background: transparent; font-size: 15px; font-weight: 750; box-sizing: border-box; }
 
 .card-list { display: grid; }
 .card-row { display: grid; grid-template-columns: 20px 100px minmax(0, 1fr) 26px; gap: 8px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--color-border); }
-.card-row[draggable=true] { cursor: grab; }
-.card-row:active { cursor: grabbing; }
-.card-row .drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; padding-top: 4px; }
+.card-row .drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; padding-top: 4px; cursor: grab; }
+.card-row .drag-mark:active { cursor: grabbing; }
 .card-preview { width: 100px; height: 72px; border: 2px dashed #dcc6ae; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; background: #fff8ed; }
 .card-preview img { width: 100%; height: 100%; object-fit: cover; }
 .no-image { font-size: 10px; color: var(--color-text-muted); text-align: center; padding: 4px; }

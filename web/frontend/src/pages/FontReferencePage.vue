@@ -9,7 +9,7 @@ const keyword = ref('');
 const sections = ref<FontReferenceSection[]>([]);
 const loading = ref(true);
 const error = ref('');
-const starFilter = ref(0);
+const starFilter = ref(new Set([1, 2, 3]));
 const selected = ref<FontReference | null>(null);
 
 const filteredSections = computed(() =>
@@ -17,7 +17,7 @@ const filteredSections = computed(() =>
     .map((section) => ({
       ...section,
       cards: section.cards.filter((card) => {
-        if (starFilter.value && card.difficulty !== starFilter.value) return false;
+        if (!starFilter.value.has(card.difficulty)) return false;
         if (keyword.value.trim() && !card.title.toLowerCase().includes(keyword.value.trim().toLowerCase())) return false;
         return true;
       }),
@@ -29,7 +29,9 @@ function stars(difficulty: number): string {
   return '★'.repeat(difficulty) + '☆'.repeat(3 - difficulty);
 }
 function toggleStar(level: number): void {
-  starFilter.value = starFilter.value === level ? 0 : level;
+  const next = new Set(starFilter.value);
+  if (next.has(level)) { next.delete(level); } else { next.add(level); }
+  starFilter.value = next;
 }
 function openCard(card: FontReference): void { selected.value = card; }
 function closeCard(): void { selected.value = null; }
@@ -68,7 +70,7 @@ onMounted(loadReferences);
               <input v-model="keyword" type="search" placeholder="输入关键词" />
             </label>
             <div class="star-filter" aria-label="按难度筛选">
-              <button v-for="star in 3" :key="star" type="button" :class="{ active: starFilter === 0 || starFilter === star }" :aria-pressed="starFilter === 0 || starFilter === star" @click="toggleStar(star)">{{ '★'.repeat(star) }}</button>
+              <button v-for="star in 3" :key="star" type="button" :class="{ active: starFilter.has(star) }" :aria-pressed="starFilter.has(star)" @click="toggleStar(star)">{{ '★'.repeat(star) }}</button>
             </div>
           </div>
 

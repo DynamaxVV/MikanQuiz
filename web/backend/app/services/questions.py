@@ -118,20 +118,19 @@ def question_stats(session: Session) -> dict:
     for difficulty, count in rows:
         counts[difficulty] = count
     by_difficulty = [{"difficulty": d, "count": counts[d]} for d in (1, 2, 3)]
-    # by font option (LEFT JOIN to include options with 0 questions)
+    # by font option × difficulty
     font_rows = session.execute(
         select(
             FontOption.id,
             FontOption.name,
-            OptionGroup.name,
+            Question.difficulty,
             func.count(Question.id),
         )
-        .join(OptionGroup, FontOption.group_id == OptionGroup.id)
-        .outerjoin(Question, FontOption.id == Question.correct_option_id)
-        .group_by(FontOption.id)
-        .order_by(OptionGroup.sort_order, OptionGroup.id, FontOption.sort_order, FontOption.id)
+        .join(Question, FontOption.id == Question.correct_option_id)
+        .group_by(FontOption.id, Question.difficulty)
+        .order_by(Question.difficulty, func.count(Question.id).desc())
     ).all()
-    by_font = [{"option_id": r[0], "option_name": r[1], "group_name": r[2], "count": r[3]} for r in font_rows]
+    by_font = [{"option_id": r[0], "option_name": r[1], "difficulty": r[2], "count": r[3]} for r in font_rows]
     return {"total": total, "by_difficulty": by_difficulty, "by_font": by_font}
 
 

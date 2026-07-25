@@ -298,11 +298,11 @@ export const api = {
   getAdminSession: async (): Promise<AdminSession> => sessionFrom(await request<RawSession>('/admin/session')),
 
   getStatistics: async (): Promise<QuestionStats> => {
-    const raw = await request<{ total: number; by_difficulty: { difficulty: number; count: number }[]; by_font: { option_id: number; option_name: string; group_name: string; count: number }[] }>('/admin/statistics');
+    const raw = await request<{ total: number; by_difficulty: { difficulty: number; count: number }[]; by_font: { option_id: number; option_name: string; difficulty: number; count: number }[] }>('/admin/statistics');
     return {
       total: raw.total,
       byDifficulty: raw.by_difficulty.map((d) => ({ difficulty: d.difficulty, count: d.count })),
-      byFont: raw.by_font.map((f) => ({ optionId: String(f.option_id), optionName: f.option_name, groupName: f.group_name, count: f.count })),
+      byFont: raw.by_font.map((f) => ({ optionId: String(f.option_id), optionName: f.option_name, difficulty: f.difficulty, count: f.count })),
     };
   },
 

@@ -154,12 +154,10 @@ onMounted(() => { void load(); });
               :key="option.id || `new-${optionIndex}`"
               class="option-row"
               :class="{ 'is-uploading': uploadingFontFor && uploadingFontFor === (option.id || option.name || '__new__') }"
-              draggable="true"
-              @dragstart="dragStart(group, optionIndex)"
               @dragover.prevent
               @drop="dropOption(group, optionIndex)"
             >
-              <span class="drag-mark" title="拖动可在分区间移动">⠿</span>
+              <span class="drag-mark" title="拖动可在分区间移动" draggable="true" @dragstart="dragStart(group, optionIndex)">⠿</span>
               <input
                 v-model="option.name"
                 maxlength="500"
@@ -215,9 +213,8 @@ onMounted(() => { void load(); });
 .option-list { display: grid; padding: 2px 12px; }
 .option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 104px 108px 26px; align-items: end; gap: 4px; padding: 4px 0; border-bottom: 1px solid var(--color-border); transition: opacity .2s; }
 .option-row.is-uploading { opacity: .65; }
-.option-row[draggable=true] { cursor: grab; }
-.option-row:active { cursor: grabbing; }
-.drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; line-height: 1; }
+.drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; line-height: 1; cursor: grab; }
+.drag-mark:active { cursor: grabbing; }
 .option-row > input, select { height: 32px; line-height: 1; border: 1px solid var(--color-border); border-radius: 8px; padding: 0 7px; color: var(--color-text); background: var(--color-surface-warm); font-size: 12px; }
 /* font upload area */
 .font-upload { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
