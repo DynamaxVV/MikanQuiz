@@ -58,9 +58,37 @@ async function removeCard(section: FontReferenceSection, card: FontReference): P
   } catch { /* 用户取消 */ }
 }
 
+function setCardDragImage(event: DragEvent, sectionIndex: number, cardIndex: number): void {
+  const card = sections.value[sectionIndex]?.cards[cardIndex];
+  if (!card || !event.dataTransfer) return;
+  const ghost = document.createElement('div');
+  ghost.textContent = card.title || '卡片';
+  ghost.style.cssText = 'position:fixed;left:-9999px;top:0;padding:8px 14px;border-radius:8px;background:#fff8ed;border:1px solid #d7aa73;font-size:13px;font-weight:600;color:#5a3e28;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, 0, 0);
+  requestAnimationFrame(() => ghost.remove());
+}
+
+function setSectionDragImage(event: DragEvent, sectionIndex: number): void {
+  const section = sections.value[sectionIndex];
+  if (!section || !event.dataTransfer) return;
+  const ghost = document.createElement('div');
+  ghost.textContent = section.name || '分区';
+  ghost.style.cssText = 'position:fixed;left:-9999px;top:0;padding:10px 16px;border-radius:10px;background:#fff;border:1px solid #efdbc1;font-size:14px;font-weight:700;color:#5a3e28;box-shadow:0 4px 12px rgba(0,0,0,.08);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, 0, 0);
+  requestAnimationFrame(() => ghost.remove());
+}
+
 function cardDragStart(event: DragEvent, sectionIndex: number, cardIndex: number): void {
   event.stopPropagation();
   draggedCard.value = { sectionIndex, cardIndex };
+  setCardDragImage(event, sectionIndex, cardIndex);
+}
+
+function cardDragOver(event: DragEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function cardDrop(event: DragEvent, targetSectionIndex: number, targetCardIndex: number): void {
@@ -78,14 +106,33 @@ function cardDrop(event: DragEvent, targetSectionIndex: number, targetCardIndex:
 function sectionDragStart(event: DragEvent, sectionIndex: number): void {
   event.stopPropagation();
   draggedSection.value = sectionIndex;
+  setSectionDragImage(event, sectionIndex);
+}
+
+function sectionDragOver(event: DragEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function sectionDrop(event: DragEvent, targetIndex: number): void {
   event.stopPropagation();
-  if (draggedCard.value) return;
+  if (draggedCard.value) {
+    const { sectionIndex: srcSecIdx, cardIndex: srcCardIdx } = draggedCard.value;
+    const srcSection = sections.value[srcSecIdx];
+    const targetSection = sections.value[targetIndex];
+    const [card] = srcSection.cards.splice(srcCardIdx, 1);
+    targetSection.cards.push(card);
+    draggedCard.value = null;
+    return;
+  }
   if (draggedSection.value === null || draggedSection.value === targetIndex) return;
   const [section] = sections.value.splice(draggedSection.value, 1);
   sections.value.splice(targetIndex, 0, section);
+  draggedSection.value = null;
+}
+
+function onDragEnd(): void {
+  draggedCard.value = null;
   draggedSection.value = null;
 }
 
@@ -166,11 +213,11 @@ onMounted(() => { void load(); });
           :key="section.id || `new-${sectionIndex}`"
           class="section-card card"
           :class="{ dragging: draggedSection === sectionIndex }"
-          @dragover.prevent
+          @dragover="sectionDragOver"
           @drop="sectionDrop($event, sectionIndex)"
         >
           <header class="section-header">
-            <span class="drag-mark" title="拖动可调整分区顺序" draggable="true" @dragstart="sectionDragStart($event, sectionIndex)">⠿</span>
+            <span class="drag-mark" title="拖动可调整分区顺序" draggable="true" @dragstart="sectionDragStart($event, sectionIndex)" @dragend="onDragEnd">⠿</span>
             <label>分区名称<input v-model="section.name" maxlength="100" placeholder="例如：笔画粗细对比" /></label>
             <button type="button" class="text-danger" @click="removeSection(section)">删除分区</button>
           </header>
@@ -179,10 +226,10 @@ onMounted(() => { void load(); });
               v-for="(card, cardIndex) in section.cards"
               :key="card.id || `new-${cardIndex}`"
               class="card-row"
-              @dragover.prevent
+              @dragover="cardDragOver"
               @drop="cardDrop($event, sectionIndex, cardIndex)"
             >
-              <span class="drag-mark" title="拖动可在分区间移动或排序" draggable="true" @dragstart="cardDragStart($event, sectionIndex, cardIndex)">⠿</span>
+              <span class="drag-mark" title="拖动可在分区间移动或排序" draggable="true" @dragstart="cardDragStart($event, sectionIndex, cardIndex)" @dragend="onDragEnd">⠿</span>
               <div class="card-preview" @click="(e: Event) => { const inp = (e.currentTarget as HTMLElement).querySelector('input') as HTMLInputElement; inp?.click(); }" @paste.prevent="(e: ClipboardEvent) => onPaste(e, card)">
                 <input
                   type="file"

@@ -98,8 +98,16 @@ async function removeGroup(group: OptionGroup): Promise<void> {
   } catch { /* 用户取消时不改变内容。 */ }
 }
 
-function dragStart(group: OptionGroup, index: number): void {
+function dragStart(event: DragEvent, group: OptionGroup, index: number): void {
   dragged.value = { group, index };
+  const option = group.options[index];
+  if (!option || !event.dataTransfer) return;
+  const ghost = document.createElement('div');
+  ghost.textContent = option.name || '字体';
+  ghost.style.cssText = 'position:fixed;left:-9999px;top:0;padding:8px 14px;border-radius:8px;background:#fff8ed;border:1px solid #d7aa73;font-size:13px;font-weight:600;color:#5a3e28;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, 0, 0);
+  requestAnimationFrame(() => ghost.remove());
 }
 
 function dropOption(targetGroup: OptionGroup, targetIndex: number): void {
@@ -108,6 +116,10 @@ function dropOption(targetGroup: OptionGroup, targetIndex: number): void {
   if (sourceGroup === targetGroup && sourceIndex === targetIndex) return;
   const [option] = sourceGroup.options.splice(sourceIndex, 1);
   targetGroup.options.splice(targetIndex, 0, option);
+  dragged.value = null;
+}
+
+function onDragEnd(): void {
   dragged.value = null;
 }
 
@@ -157,7 +169,7 @@ onMounted(() => { void load(); });
               @dragover.prevent
               @drop="dropOption(group, optionIndex)"
             >
-              <span class="drag-mark" title="拖动可在分区间移动" draggable="true" @dragstart="dragStart(group, optionIndex)">⠿</span>
+              <span class="drag-mark" title="拖动可在分区间移动" draggable="true" @dragstart="dragStart($event, group, optionIndex)" @dragend="onDragEnd">⠿</span>
               <input
                 v-model="option.name"
                 maxlength="500"

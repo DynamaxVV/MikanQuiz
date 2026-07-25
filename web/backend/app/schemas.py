@@ -268,7 +268,7 @@ class DifficultyStat(ApiModel):
 class FontStat(ApiModel):
     option_id: int
     option_name: str
-    difficulty: int
+    minimum_difficulty: int
     count: int
 
 
