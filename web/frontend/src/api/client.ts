@@ -321,10 +321,11 @@ export const api = {
   updateQuestion: async (id: string, question: QuestionPayload): Promise<Question> =>
     mapQuestion(await request<RawQuestion>(`/admin/questions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(toQuestionWrite(question)) })),
 
-  uploadImage: async (file: File): Promise<string> => {
+  uploadImage: async (file: File, prefix?: string): Promise<string> => {
     const form = new FormData();
     form.set('image', file);
-    const response = await request<{ image_url: string }>('/admin/images', { method: 'POST', body: form });
+    const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : '';
+    const response = await request<{ image_url: string }>(`/admin/images${qs}`, { method: 'POST', body: form });
     return response.image_url;
   },
 

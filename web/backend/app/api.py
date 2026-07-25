@@ -376,6 +376,7 @@ def get_admin_question(
 @router.post("/admin/images", response_model=ImageUploadResponse, status_code=201)
 async def upload_admin_image(
     image: UploadFile = File(...),
+    prefix: str | None = Query(default=None, max_length=32, pattern="^[a-zA-Z0-9_-]+$"),
     auth: AdminAuth = Depends(require_admin),
     settings: AppSettings = Depends(get_app_settings),
 ) -> ImageUploadResponse:
@@ -384,7 +385,7 @@ async def upload_admin_image(
     content_type = image.content_type or ""
     started_at = perf_counter()
     try:
-        image_url = image_service.upload_image(settings, content, content_type)
+        image_url = image_service.upload_image(settings, content, content_type, prefix=prefix)
     except ApiError as error:
         log_event(
             "r2_upload_failed",

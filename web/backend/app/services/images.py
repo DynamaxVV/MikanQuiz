@@ -31,14 +31,21 @@ UPLOADER = Path(__file__).resolve().parents[3] / "r2-uploader" / "upload.mjs"
 DELETER = Path(__file__).resolve().parents[3] / "r2-uploader" / "delete.mjs"
 
 
-def upload_image(settings: AppSettings, content: bytes, content_type: str) -> str:
+def upload_image(settings: AppSettings, content: bytes, content_type: str, prefix: str | None = None) -> str:
     """Validate one image, then delegate the authenticated R2 PUT to Node."""
     suffix = validate_image(content, content_type)
     ensure_configured(settings)
+    key = f"{prefix.rstrip('/')}/{_random_key()}{suffix}" if prefix else None
     with NamedTemporaryFile(suffix=suffix) as image:
         image.write(content)
         image.flush()
-        return run_uploader(settings, image.name, content_type)
+        return run_uploader(settings, image.name, content_type, key=key)
+
+
+def _random_key() -> str:
+    """Generate a short random hex string for unique object keys."""
+    import secrets
+    return secrets.token_hex(16)
 
 
 def validate_image(content: bytes, content_type: str) -> str:
