@@ -83,12 +83,15 @@ function setSectionDragImage(event: DragEvent, sectionIndex: number): void {
 function cardDragStart(event: DragEvent, sectionIndex: number, cardIndex: number): void {
   event.stopPropagation();
   draggedCard.value = { sectionIndex, cardIndex };
+  event.dataTransfer?.setData('application/x-card', '');
   setCardDragImage(event, sectionIndex, cardIndex);
 }
 
 function cardDragOver(event: DragEvent): void {
-  event.preventDefault();
-  event.stopPropagation();
+  if (event.dataTransfer?.types.includes('application/x-card')) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 }
 
 function cardDrop(event: DragEvent, targetSectionIndex: number, targetCardIndex: number): void {
@@ -106,16 +109,11 @@ function cardDrop(event: DragEvent, targetSectionIndex: number, targetCardIndex:
 function sectionDragStart(event: DragEvent, sectionIndex: number): void {
   event.stopPropagation();
   draggedSection.value = sectionIndex;
+  event.dataTransfer?.setData('application/x-section', '');
   setSectionDragImage(event, sectionIndex);
 }
 
-function sectionDragOver(event: DragEvent): void {
-  event.preventDefault();
-  event.stopPropagation();
-}
-
 function sectionDrop(event: DragEvent, targetIndex: number): void {
-  event.stopPropagation();
   if (draggedCard.value) {
     const { sectionIndex: srcSecIdx, cardIndex: srcCardIdx } = draggedCard.value;
     const srcSection = sections.value[srcSecIdx];
@@ -213,7 +211,7 @@ onMounted(() => { void load(); });
           :key="section.id || `new-${sectionIndex}`"
           class="section-card card"
           :class="{ dragging: draggedSection === sectionIndex }"
-          @dragover="sectionDragOver"
+          @dragover.prevent
           @drop="sectionDrop($event, sectionIndex)"
         >
           <header class="section-header">
