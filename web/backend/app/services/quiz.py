@@ -22,7 +22,7 @@ class RandomSource(Protocol):
 def create_attempt(session: Session, mode: str, random_source: RandomSource | None = None) -> tuple[str, QuizAttempt, list[PublicQuestion]]:
     settings = get_settings(session)
     weights = settings.modes[mode]
-    effective_difficulty = max(i + 1 for i, w in enumerate(weights) if w > 0) if any(w > 0 for w in weights) else 1
+    effective_difficulty = {"beginner": 1, "proficient": 2, "challenge": 3}[mode]
     selected = select_questions(session.scalars(select(Question)).all(), settings.question_count, weights, random_source)
     if any(question.correct_option_id is None for question in selected):
         raise ApiError(409, "QUESTION_FONT_MISSING", "题库有题目的正确字体已被删除，请管理员修复后再开始练习")
