@@ -168,9 +168,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
             <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" :style="{ '--quiz-media-max-h': imageMaxHeight }" />
           </section>
           <section ref="answerPanelRef" class="answer-panel" aria-label="答案选项">
-            <label class="font-render-toggle">
+            <label class="font-render-toggle" @click.prevent="toggleFontRender">
               <span class="toggle-label">即时渲染字体</span>
-              <span class="toggle-track" :class="{ on: fontRenderEnabled }" @click.prevent="toggleFontRender" @keydown.enter.prevent="toggleFontRender" @keydown.space.prevent="toggleFontRender" role="switch" :aria-checked="fontRenderEnabled" tabindex="0">
+              <span class="toggle-track" :class="{ on: fontRenderEnabled }" role="switch" :aria-checked="fontRenderEnabled" tabindex="0">
                 <span class="toggle-thumb"></span>
               </span>
             </label>
@@ -227,7 +227,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
 .answers { display: grid; gap: 8px; }
 .option-group { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 14px; background: #fffdf9; }
 .option-group h2 { margin: 0 0 4px; color: #85451e; font-size: 14px; }
-.option-group button { display: inline-flex; align-items: center; justify-content: center; margin: 0 5px 5px 0; border: 1px solid transparent; border-radius: 10px; padding: 0 7px; height: 34px; line-height: 1; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.option-group button { display: inline-flex; align-items: center; justify-content: center; margin: 0 5px 5px 0; border: 1px solid transparent; border-radius: 10px; padding: 0 7px; height: 34px; line-height: 1; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .option-group button:hover { border-color: #edcfac; color: #85451e; background: #fff8ed; }
 .option-group button.selected { border-color: #d58a45; color: #85451e; background: #fff0d8; }
 .option-group button:focus-visible { outline: 3px solid rgba(213, 138, 69, .3); outline-offset: 2px; }
