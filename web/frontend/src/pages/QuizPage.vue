@@ -21,6 +21,22 @@ const answeredCount = computed(() => Object.keys(answers.value).length);
 const modeLabel = computed(() => ({ beginner: '新手级', proficient: '熟练级', challenge: '挑战级' }[attempt.value?.mode ?? 'beginner']));
 
 const fontRenderEnabled = ref(localStorage.getItem('hanzipen-font-render') === '1');
+
+const difficultyCap = computed(() => {
+  const mode = attempt.value?.mode;
+  if (mode === 'beginner') return 1;
+  if (mode === 'proficient') return 2;
+  return 3;
+});
+
+const filteredGroups = computed(() => {
+  if (!currentQuestion.value) return [];
+  return currentQuestion.value.optionGroups.map((group) => ({
+    ...group,
+    options: group.options.filter((option) => option.minimumDifficulty <= difficultyCap.value),
+  })).filter((group) => group.options.length > 0);
+});
+
 function toggleFontRender(): void {
   fontRenderEnabled.value = !fontRenderEnabled.value;
   localStorage.setItem('hanzipen-font-render', fontRenderEnabled.value ? '1' : '0');
@@ -144,7 +160,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 <span class="toggle-thumb"></span>
               </span>
             </label>
-            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in currentQuestion.optionGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
+            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in filteredGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
             <p class="font-preview-tips">{{ fontRenderEnabled ? '字体即时渲染已开启' : '长按字体选项可预览字体效果' }}</p>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>
             <p v-if="error" class="status-error" role="alert">{{ error }}</p>
@@ -192,7 +208,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .quiz-layout { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); gap: 28px; padding: 28px 0 64px; }
 .question-panel { padding: 28px; }
 .question-panel h1 { margin: 0 0 24px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.3; letter-spacing: -.015em; }
-.quiz-media :deep(.image-button) { height: min(42vh, 360px); }
+.quiz-media :deep(.image-button) { height: min(62vh, 540px); max-height: none; }
 .answer-panel { position: sticky; top: 18px; align-self: start; padding: 8px 0; }
 .answers { display: grid; gap: 8px; }
 .option-group { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 14px; background: #fffdf9; }
