@@ -212,28 +212,28 @@ onMounted(() => { void load(); });
 .group-header label, .difficulty-label { display: grid; gap: 5px; color: var(--color-text-muted); font-size: 12px; font-weight: 750; }
 .group-header input { width: 100%; border: 0; border-bottom: 1px solid #d8b789; padding: 5px 0; color: var(--color-text); background: transparent; font-size: 15px; font-weight: 750; }
 .option-list { display: grid; padding: 2px 12px; }
-.option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 104px 108px 26px; align-items: end; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--color-border); transition: opacity .2s; }
+.option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 104px 108px 26px; align-items: end; gap: 4px; padding: 4px 0; border-bottom: 1px solid var(--color-border); transition: opacity .2s; }
 .option-row.is-uploading { opacity: .65; }
 .option-row[draggable=true] { cursor: grab; }
 .option-row:active { cursor: grabbing; }
-.drag-mark { display: grid; width: 20px; height: 30px; place-items: center; color: #9a652d; font-size: 17px; line-height: 1; }
-.option-row > input, select { height: 36px; line-height: 1; border: 1px solid var(--color-border); border-radius: 10px; padding: 0 8px; color: var(--color-text); background: var(--color-surface-warm); font-size: 12px; }
+.drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; line-height: 1; }
+.option-row > input, select { height: 32px; line-height: 1; border: 1px solid var(--color-border); border-radius: 8px; padding: 0 7px; color: var(--color-text); background: var(--color-surface-warm); font-size: 12px; }
 /* font upload area */
-.font-upload { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.font-upload-btn { width: 100%; height: 36px; border: 1px dashed #d7aa73; border-radius: 10px; padding: 0 6px; color: #9a652d; background: transparent; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background .15s; }
+.font-upload { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.font-upload-btn { width: 100%; height: 32px; border: 1px dashed #d7aa73; border-radius: 8px; padding: 0 6px; color: #9a652d; background: transparent; font-size: 11px; cursor: pointer; white-space: nowrap; transition: background .15s; }
 .font-upload-btn:hover { background: #fdf3e4; }
 .font-upload-btn:disabled { opacity: .5; cursor: not-allowed; }
-.font-progress { width: 100%; height: 4px; border-radius: 2px; background: #ede1cf; overflow: hidden; }
+.font-progress { width: 100%; height: 3px; border-radius: 2px; background: #ede1cf; overflow: hidden; }
 .font-progress-bar { height: 100%; border-radius: 2px; background: var(--color-action); transition: width .2s ease; }
-.font-file { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; height: 36px; border: 1px solid #78b63c; border-radius: 10px; padding: 0 8px; background: #ecf8df; }
+.font-file { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; height: 32px; border: 1px solid #78b63c; border-radius: 8px; padding: 0 6px; background: #ecf8df; }
 .font-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3e6b14; font-size: 11px; font-weight: 650; }
-.font-clear-btn { flex-shrink: 0; min-height: 24px; border: 1px solid #b8d99a; border-radius: 6px; padding: 0 8px; color: #5a8a2f; background: #fff; font-size: 11px; font-weight: 650; cursor: pointer; transition: background .15s; }
+.font-clear-btn { flex-shrink: 0; min-height: 20px; border: 1px solid #b8d99a; border-radius: 6px; padding: 0 6px; color: #5a8a2f; background: #fff; font-size: 11px; font-weight: 650; cursor: pointer; transition: background .15s; }
 .font-clear-btn:hover { background: #fefefc; }
 .remove-option, .text-danger { border: 0; background: transparent; color: var(--color-danger); font-weight: 700; }
 .text-danger { align-self: flex-start; padding: 5px 0; }
-.remove-option { width: 26px; height: 26px; border-radius: 50%; font-size: 19px; }
+.remove-option { width: 22px; height: 22px; border-radius: 50%; font-size: 16px; }
 .remove-option:hover, .text-danger:hover { background: #fff0ee; }
-.add-option { justify-self: start; margin: 10px 16px 12px; border: 1px dashed #d7aa73; border-radius: 8px; padding: 6px 10px; color: var(--color-action); background: transparent; font-size: 14px; cursor: pointer; }
+.add-option { justify-self: start; margin: 8px 12px 10px; border: 1px dashed #d7aa73; border-radius: 8px; padding: 4px 8px; color: var(--color-action); background: transparent; font-size: 13px; cursor: pointer; }
 .save-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #efdbc1; border-radius: 14px; background: #fff8ed; }
 .save-bar p { margin: 0; color: var(--color-text-muted); font-size: 13px; }
 .save-bar button { min-height: 44px; border: 0; border-radius: var(--radius-button); padding: 0 20px; color: #fff; background: var(--color-action); font-weight: 750; }
