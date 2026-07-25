@@ -223,32 +223,82 @@ def test_admin_image_upload_rejects_unsupported_content(client: TestClient) -> N
     assert response.json()["error"]["code"] == "INVALID_IMAGE"
 
 
-def test_font_references_are_public_and_admin_managed(client: TestClient) -> None:
-    """Cover the public list plus authenticated creation and removal boundaries."""
+def test_font_references_with_sections(client: TestClient) -> None:
+    """Cover catalogue save and public grouped listing."""
     headers = admin_headers(client)
-    denied = client.post(
-        "/api/v1/admin/font-references",
-        json={"title": "未登录", "image_url": "https://images.example.test/no.png"},
+    denied = client.put(
+        "/api/v1/admin/font-reference-sections",
+        json={"sections": [{"name": "空节", "sort_order": 0, "cards": []}]},
     )
     assert denied.status_code == 401
-    created = client.post(
-        "/api/v1/admin/font-references",
-        headers=headers,
-        json={
-            "title": "宋体与仿宋对照",
-            "image_url": "https://images.example.test/font-reference.png",
-            "note": "用于观察横竖笔画差异。",
-        },
-    )
-    assert created.status_code == 201, created.text
-    item = created.json()
+    payload = {
+        "sections": [
+            {
+                "name": "宋体",
+                "sort_order": 0,
+                "cards": [
+                    {
+                        "title": "宋体与仿宋对照",
+                        "image_url": "https://images.example.test/font-ref.png",
+                        "note": "用于观察横竖笔画",
+                        "difficulty": 2,
+                        "sort_order": 0,
+                    }
+                ],
+            },
+            {
+                "name": "黑体",
+                "sort_order": 1,
+                "cards": [],
+            },
+        ]
+    }
+    saved = client.put("/api/v1/admin/font-reference-sections", headers=headers, json=payload)
+    assert saved.status_code == 200, saved.text
+    saved_data = saved.json()
+    assert len(saved_data) == 2
+    assert saved_data[0]["name"] == "宋体"
+    assert len(saved_data[0]["cards"]) == 1
+    assert saved_data[0]["cards"][0]["title"] == "宋体与仿宋对照"
+    assert saved_data[0]["cards"][0]["sort_order"] == 0
+    assert saved_data[1]["name"] == "黑体"
+    assert saved_data[1]["cards"] == []
+
     public = client.get("/api/v1/font-references")
     assert public.status_code == 200
-    assert public.json() == [item]
-    deleted = client.delete(
-        f"/api/v1/admin/font-references/{item['id']}", headers=headers
-    )
-    assert deleted.status_code == 204
+    public_data = public.json()
+    assert len(public_data) == 2
+    assert public_data[0]["name"] == "宋体"
+    assert len(public_data[0]["cards"]) == 1
+
+    edited = {
+        "sections": [
+            {
+                "id": saved_data[0]["id"],
+                "name": "宋体类",
+                "sort_order": 0,
+                "cards": [
+                    {
+                        "id": saved_data[0]["cards"][0]["id"],
+                        "title": "宋体与仿宋对照（已编辑）",
+                        "image_url": "https://images.example.test/font-ref.png",
+                        "note": "已更新说明",
+                        "difficulty": 3,
+                        "sort_order": 0,
+                    }
+                ],
+            }
+        ]
+    }
+    updated = client.put("/api/v1/admin/font-reference-sections", headers=headers, json=edited)
+    assert updated.status_code == 200, updated.text
+    updated_data = updated.json()
+    assert len(updated_data) == 1
+    assert updated_data[0]["name"] == "宋体类"
+    assert updated_data[0]["cards"][0]["title"] == "宋体与仿宋对照（已编辑）"
+
+    empty = client.put("/api/v1/admin/font-reference-sections", headers=headers, json={"sections": []})
+    assert empty.status_code == 200
     assert client.get("/api/v1/font-references").json() == []
 
 

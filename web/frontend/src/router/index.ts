@@ -22,6 +22,6 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => { document.title = `${to.meta.title ?? '砂糖的秘密小课堂'} · 砂糖的秘密小课堂`; });
+router.beforeEach((to) => { document.title = (to.meta.title as string) ?? '砂糖的秘密小课堂'; });
 
 export default router;

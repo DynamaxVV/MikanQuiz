@@ -3,21 +3,26 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import BrandHeader from '@/components/BrandHeader.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
-import type { FontReference } from '@/types';
+import type { FontReference, FontReferenceSection } from '@/types';
 
 const keyword = ref('');
-const references = ref<FontReference[]>([]);
+const sections = ref<FontReferenceSection[]>([]);
 const loading = ref(true);
 const error = ref('');
 const starFilter = ref(0);
 const selected = ref<FontReference | null>(null);
 
-const filtered = computed(() =>
-  references.value.filter((item) => {
-    if (starFilter.value && item.difficulty !== starFilter.value) return false;
-    if (keyword.value.trim() && !item.title.toLowerCase().includes(keyword.value.trim().toLowerCase())) return false;
-    return true;
-  }),
+const filteredSections = computed(() =>
+  sections.value
+    .map((section) => ({
+      ...section,
+      cards: section.cards.filter((card) => {
+        if (starFilter.value && card.difficulty !== starFilter.value) return false;
+        if (keyword.value.trim() && !card.title.toLowerCase().includes(keyword.value.trim().toLowerCase())) return false;
+        return true;
+      }),
+    }))
+    .filter((section) => section.cards.length > 0),
 );
 
 function stars(difficulty: number): string {
@@ -38,7 +43,7 @@ onBeforeUnmount(() => { document.body.style.overflow = ''; });
 async function loadReferences(): Promise<void> {
   loading.value = true;
   error.value = '';
-  try { references.value = await api.listFontReferences(); }
+  try { sections.value = await api.listFontReferences(); }
   catch (caught) { error.value = caught instanceof Error ? caught.message : '嵌字笔记加载失败。'; }
   finally { loading.value = false; }
 }
@@ -67,25 +72,30 @@ onMounted(loadReferences);
             </div>
           </div>
 
-          <div v-if="references.length === 0" class="empty-state card">
+          <div v-if="sections.length === 0" class="empty-state card">
             <strong>尚未配置嵌字笔记卡片</strong><span>管理员可在后台上传第一张卡片。</span>
           </div>
-          <div v-else-if="filtered.length === 0" class="empty-state card">
+          <div v-else-if="filteredSections.length === 0" class="empty-state card">
             <strong>没有匹配的卡片</strong>
           </div>
 
-          <div v-else class="card-grid">
-            <div v-for="card in filtered" :key="card.id" class="tutorial-card" tabindex="0" @click="openCard(card)" @keydown.enter="openCard(card)">
-              <div class="card-head">
-                <h2>{{ card.title }}</h2>
-                <span class="card-stars" aria-label="难度 {{ card.difficulty }} 星">{{ stars(card.difficulty) }}</span>
+          <template v-else>
+            <section v-for="section in filteredSections" :key="section.id" class="section-group" :aria-labelledby="`section-${section.id}`">
+              <h2 :id="`section-${section.id}`" class="section-title">{{ section.name }}</h2>
+              <div class="card-grid">
+                <div v-for="card in section.cards" :key="card.id" class="tutorial-card" tabindex="0" @click="openCard(card)" @keydown.enter="openCard(card)">
+                  <div class="card-head">
+                    <h3>{{ card.title }}</h3>
+                    <span class="card-stars" aria-label="难度 {{ card.difficulty }} 星">{{ stars(card.difficulty) }}</span>
+                  </div>
+                  <div class="card-body">
+                    <img :src="card.imageUrl" :alt="card.title" />
+                    <p>{{ card.note || '暂无说明' }}</p>
+                  </div>
+                </div>
               </div>
-              <div class="card-body">
-                <img :src="card.imageUrl" :alt="card.title" />
-                <p>{{ card.note || '暂无说明' }}</p>
-              </div>
-            </div>
-          </div>
+            </section>
+          </template>
         </template>
       </section>
     </div>
@@ -123,13 +133,16 @@ onMounted(loadReferences);
 .star-filter button { min-height: 34px; border: 1px solid var(--color-border); border-radius: 999px; padding: 0 12px; color: #b9aa99; background: var(--color-surface-warm); font-size: 14px; letter-spacing: 1px; cursor: pointer; }
 .star-filter button.active { border-color: #ebcfad; color: var(--color-action); background: var(--color-surface-accent); }
 
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; margin-top: 28px; }
+.section-group { margin-top: 36px; }
+.section-title { margin: 0 0 16px; font-size: 22px; font-weight: 700; color: var(--color-text); padding-bottom: 8px; border-bottom: 2px solid var(--color-border); }
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
 .tutorial-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 18px; box-shadow: var(--shadow-card); overflow: hidden; cursor: pointer; transition: transform 160ms ease-out, box-shadow 160ms ease-out; }
 .tutorial-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
 .tutorial-card:active { transform: scale(0.98); }
 
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 20px 14px; border-bottom: 1px solid var(--color-border); }
-.card-head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.card-head h3 { margin: 0; font-size: 18px; font-weight: 700; }
 .card-stars { color: #e8a317; font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
 .card-head .card-stars { font-size: 14px; }
 
@@ -177,7 +190,7 @@ onMounted(loadReferences);
 @media (max-width: 480px) {
   .content { width: min(100% - 24px, 1280px); }
   .card-head { padding: 16px 16px 12px; }
-  .card-head h2 { font-size: 16px; }
+  .card-head h3 { font-size: 16px; }
   .card-head .card-stars { font-size: 13px; }
   .card-body { padding: 12px 16px 16px; gap: 12px; }
   .card-body img { width: 80px; height: 60px; }
