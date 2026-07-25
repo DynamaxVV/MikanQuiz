@@ -106,7 +106,11 @@ def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> li
     existing_options = {item.id: item for item in session.scalars(select(FontOption)).all()}
     incoming_group_ids = {item.id for item in payload.groups if item.id is not None}
     incoming_option_ids = {item.id for group in payload.groups for item in group.options if item.id is not None}
+    protected_names = {"类黑", "类宋", "类圆", "类黑体", "类宋体", "类圆体"}
     missing_group_ids = set(existing_groups) - incoming_group_ids
+    protected_deleted = [existing_groups[gid].name for gid in missing_group_ids if existing_groups[gid].name in protected_names]
+    if protected_deleted:
+        raise ApiError(403, "OPTION_GROUP_PROTECTED", f"分区「{protected_deleted[0]}」是系统保留分区，不能删除")
     nonempty_groups = [
         existing_groups[group_id].name
         for group_id in missing_group_ids

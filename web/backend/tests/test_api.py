@@ -313,3 +313,19 @@ def test_catalog_rejects_deleting_a_nonempty_group(client: TestClient) -> None:
         headers=headers,
     )
     assert (response.status_code, response.json()["error"]["code"]) == (409, "OPTION_GROUP_NOT_EMPTY")
+
+
+def test_catalog_rejects_deleting_protected_groups(client: TestClient) -> None:
+    """类黑, 类宋, 类圆 are system-reserved and cannot be deleted even when empty."""
+    headers = admin_headers(client)
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    for group in catalog:
+        group["options"] = []
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    for name in ["类黑体", "类宋体", "类圆体"]:
+        response = client.put(
+            "/api/v1/admin/option-groups",
+            json={"groups": [group for group in catalog if group["name"] != name]},
+            headers=headers,
+        )
+        assert (response.status_code, response.json()["error"]["code"]) == (403, "OPTION_GROUP_PROTECTED"), f"{name} should be protected"

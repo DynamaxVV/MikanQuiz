@@ -13,6 +13,8 @@ page { background: #fff9f0; color: #332718; }
 .image-preview image { width: 180rpx; height: 180rpx; border-radius: 14rpx; }
 .image-preview text { color: #b5483f; font-size: 24rpx; }
 .option-label, .analysis-title { padding: 22rpx 4rpx 4rpx; color: #725e48; font-size: 26rpx; font-weight: 700; }
+.font-columns { display: flex; gap: 16rpx; }
+.font-col { flex: 1; min-width: 0; }
 .input-row { display: flex; align-items: center; }
 .input-row text { width: 30rpx; margin-right: 20rpx; color: #e37e00; font-weight: 700; }
 .input-row input { flex: 1; }

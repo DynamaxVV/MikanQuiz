@@ -8,6 +8,7 @@ import ErrorPanel from '@/components/ErrorPanel.vue';
 import type { FontOption, OptionGroup } from '@/types';
 
 const { fontStyle } = useFontRendering();
+const protectedGroupNames = ['类黑', '类宋', '类圆', '类黑体', '类宋体', '类圆体'];
 const groups = ref<OptionGroup[]>([]);
 const loading = ref(true);
 const saving = ref(false);
@@ -146,7 +147,7 @@ onMounted(() => { void load(); });
       <ErrorPanel v-else-if="error && !groups.length" :message="error" @retry="load" />
       <form v-else class="catalog" @submit.prevent="save">
         <article v-for="(group, groupIndex) in groups" :key="group.id || `new-${groupIndex}`" class="group-card card">
-          <header class="group-header"><label>分区名称<input v-model="group.name" maxlength="100" placeholder="例如：类黑体" /></label><button type="button" class="text-danger" @click="removeGroup(group)">删除分区</button></header>
+          <header class="group-header"><label>分区名称<input v-model="group.name" maxlength="100" placeholder="例如：类黑体" /></label><button v-if="!protectedGroupNames.includes(group.name)" type="button" class="text-danger" @click="removeGroup(group)">删除分区</button></header>
           <div class="option-list">
             <div
               v-for="(option, optionIndex) in group.options"

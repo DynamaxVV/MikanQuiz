@@ -22,7 +22,14 @@ Page({
       const calls = [api.getOptionGroups(this.adminToken)];
       if (this.questionId) calls.push(api.getAdminQuestion(this.adminToken, this.questionId));
       const data = await Promise.all(calls);
-      this.setData({ optionGroups: data[0], form: data[1] ? questionToForm(data[1]) : this.data.form });
+      const groups = data[0];
+      const leftNames = ["类黑", "类宋", "类圆", "类黑体", "类宋体", "类圆体"];
+      this.setData({
+        optionGroups: groups,
+        leftGroups: groups.filter(g => leftNames.includes(g.name)),
+        rightGroups: groups.filter(g => !leftNames.includes(g.name)),
+        form: data[1] ? questionToForm(data[1]) : this.data.form,
+      });
     } catch (error) { wx.showToast({ title: error.message || "题目加载失败", icon: "none" }); }
   },
 

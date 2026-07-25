@@ -10,7 +10,7 @@ import type { OptionGroup, QuestionPayload } from '@/types';
 
 const route = useRoute();
 const { fontStyle } = useFontRendering();
-const fontRenderEnabled = ref(true);
+const fontRenderEnabled = ref(false);
 const id = computed(() => String(route.params.id || ''));
 const editing = computed(() => Boolean(id.value));
 const groups = ref<OptionGroup[]>([]);
