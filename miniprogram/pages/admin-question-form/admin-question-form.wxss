@@ -16,10 +16,10 @@ page { background: #fff9f0; color: #332718; }
 .input-row { display: flex; align-items: center; }
 .input-row text { width: 30rpx; margin-right: 20rpx; color: #e37e00; font-weight: 700; }
 .input-row input { flex: 1; }
-.preset-box { margin: 18rpx 0 4rpx; border-radius: 14rpx; padding: 18rpx; background: #fff8ed; }
-.preset-title { margin-bottom: 12rpx; color: #987049; font-size: 22rpx; }
-.preset-list { display: flex; flex-wrap: wrap; gap: 12rpx; }
-.preset { border: 1rpx solid #f0ddc5; border-radius: 999rpx; padding: 9rpx 16rpx; color: #8b5c28; background: #fff; font-size: 24rpx; }
+.preset-box { margin: 12rpx 0 4rpx; border-radius: 14rpx; padding: 14rpx; background: #fff8ed; }
+.preset-title { margin-bottom: 8rpx; color: #987049; font-size: 22rpx; }
+.preset-list { display: flex; flex-wrap: wrap; gap: 8rpx; }
+.preset { border: 1rpx solid #f0ddc5; border-radius: 999rpx; padding: 6rpx 14rpx; color: #8b5c28; background: #fff; font-size: 23rpx; }
 .preset:active { background: #ffe8c2; }
 .answer-row radio { transform: scale(.75); }
 .analysis-input { border-top: 1rpx solid #f0e4d6; border-bottom: 0; }

@@ -22,9 +22,10 @@ def _option_response(option: FontOption) -> FontOptionResponse:
     return FontOptionResponse(id=option.id, name=option.name, font_url=option.font_url, minimum_difficulty=option.minimum_difficulty, sort_order=option.sort_order)
 
 
-def public_question(session: Session, question: Question) -> PublicQuestion:
+def public_question(session: Session, question: Question, mode_difficulty: int | None = None) -> PublicQuestion:
     """Serialize only information safe to disclose before an answer is submitted."""
-    return PublicQuestion(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, option_groups=catalogue(session, question.difficulty))
+    effective = mode_difficulty if mode_difficulty is not None else question.difficulty
+    return PublicQuestion(id=question.id, text=question.text, image_url=question.image_url, difficulty=question.difficulty, option_groups=catalogue(session, effective))
 
 
 def admin_question(session: Session, question: Question) -> QuestionResponse:

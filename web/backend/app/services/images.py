@@ -17,7 +17,7 @@ from app.logging import log_event
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGES = {"image/jpeg": (".jpg", b"\xff\xd8\xff"), "image/png": (".png", b"\x89PNG\r\n\x1a\n"), "image/gif": (".gif", b"GIF8"), "image/webp": (".webp", b"RIFF")}
-MAX_FONT_BYTES = 20 * 1024 * 1024
+MAX_FONT_BYTES = 40 * 1024 * 1024
 ALLOWED_FONTS = {
     "font/ttf": (".ttf", b"\x00\x01\x00\x00"),
     "application/x-font-ttf": (".ttf", b"\x00\x01\x00\x00"),
@@ -96,7 +96,7 @@ def upload_font(settings: AppSettings, content: bytes, content_type: str, filena
 def validate_font(content: bytes, content_type: str) -> str:
     """Reject oversized or malformed font files. Format detected by magic bytes, not Content-Type."""
     if len(content) > MAX_FONT_BYTES:
-        raise ApiError(422, "INVALID_FONT", "仅支持 20MB 以内的 TTF、OTF、WOFF 或 WOFF2 字体文件")
+        raise ApiError(422, "INVALID_FONT", "仅支持 40MB 以内的 TTF、OTF、WOFF 或 WOFF2 字体文件")
     for suffix, magic in ALLOWED_FONTS.values():
         if content.startswith(magic):
             return suffix

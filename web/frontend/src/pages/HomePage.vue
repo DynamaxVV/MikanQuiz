@@ -27,7 +27,7 @@ function beginQuiz(): void {
             <span aria-hidden="true">→</span>
           </button>
           <RouterLink class="action-card reference-card" to="/font-reference">
-            <span><strong>嵌字笔记</strong><small>砂糖的小本本~</small></span>
+            <span><strong>嵌字小本本</strong><small>一点点点点也许嵌字会用上的教程</small></span>
             <span aria-hidden="true">→</span>
           </RouterLink>
           <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>
