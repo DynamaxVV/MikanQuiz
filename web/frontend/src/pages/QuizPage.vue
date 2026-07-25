@@ -85,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
         </header>
         <div class="quiz-layout">
           <section class="question-panel card">
-            <p class="eyebrow">第 {{ currentIndex + 1 }} 题 · {{ '★'.repeat(currentQuestion.difficulty) }}</p>
+            <p class="eyebrow">第 {{ currentIndex + 1 }} 题</p>
             <h1>{{ currentQuestion.text }}</h1>
             <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" />
           </section>

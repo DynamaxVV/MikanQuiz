@@ -38,6 +38,7 @@ export interface QuizAttempt {
 
 export interface WrongAnswer {
   questionText: string;
+  difficulty: number;
   imageUrl: string | null;
   options: Partial<Record<AnswerKey, string>>;
   selected: AnswerKey | null;

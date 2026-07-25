@@ -99,7 +99,7 @@ def submit_attempt(session: Session, token: str, data: AttemptSubmit):
         selected = data.answers[question_id]
         correct = snapshot["correct_option_id"]
         groups = snapshot["option_groups"]
-        session.add(SubmissionAnswer(submission_id=submission.id, question_id=question_id, question_text=snapshot["text"], image_url=snapshot.get("image_url"), options=[], option_groups=groups, selected=str(selected), correct_answer=str(correct), selected_option_id=selected, correct_option_id=correct, explanation=snapshot["explanation"], is_correct=selected == correct))
+        session.add(SubmissionAnswer(submission_id=submission.id, question_id=question_id, question_text=snapshot["text"], difficulty=snapshot.get("difficulty", 1), image_url=snapshot.get("image_url"), options=[], option_groups=groups, selected=str(selected), correct_answer=str(correct), selected_option_id=selected, correct_option_id=correct, explanation=snapshot["explanation"], is_correct=selected == correct))
     attempt.submitted_at = utc_now()
     session.commit()
     return stored_result(session, submission)

@@ -59,6 +59,7 @@ interface RawAttempt {
 interface RawSubmissionDetail {
   question_id: number | null;
   question_text: string;
+  difficulty: number;
   image_url?: string | null;
   options?: string[];
   option_groups?: RawOptionGroup[] | null;
@@ -198,7 +199,7 @@ function mapWrongAnswer(detail: RawSubmissionDetail): WrongAnswer {
   const selected = detail.selected_option_id ? names.get(String(detail.selected_option_id)) ?? detail.selected : detail.selected;
   const correct = detail.correct_option_id ? names.get(String(detail.correct_option_id)) ?? detail.correct_answer : detail.correct_answer;
   return {
-    questionText: detail.question_text, imageUrl: detail.image_url ?? null,
+    questionText: detail.question_text, difficulty: detail.difficulty, imageUrl: detail.image_url ?? null,
     options: optionGroups.length ? {} : detail.options ? mapOptions(detail.options) : {}, selected,
     correct, explanation: detail.explanation,
   };

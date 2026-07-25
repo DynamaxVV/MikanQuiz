@@ -42,7 +42,7 @@ def settings_response(settings: QuizSettings) -> SettingsResponse:
 
 def submission_detail(answer: SubmissionAnswer) -> SubmissionDetail:
     """Read both newly structured snapshots and preserved legacy A-D snapshots."""
-    return SubmissionDetail(question_id=answer.question_id, question_text=answer.question_text, image_url=answer.image_url, options=answer.options, option_groups=[OptionGroupResponse.model_validate(group) for group in answer.option_groups] if answer.option_groups else None, selected=answer.selected, correct_answer=answer.correct_answer, selected_option_id=answer.selected_option_id, correct_option_id=answer.correct_option_id, explanation=answer.explanation, is_correct=answer.is_correct)
+    return SubmissionDetail(question_id=answer.question_id, question_text=answer.question_text, difficulty=answer.difficulty, image_url=answer.image_url, options=answer.options, option_groups=[OptionGroupResponse.model_validate(group) for group in answer.option_groups] if answer.option_groups else None, selected=answer.selected, correct_answer=answer.correct_answer, selected_option_id=answer.selected_option_id, correct_option_id=answer.correct_option_id, explanation=answer.explanation, is_correct=answer.is_correct)
 
 
 def submission_result(submission: Submission, answers: list[SubmissionAnswer]) -> SubmissionResult:

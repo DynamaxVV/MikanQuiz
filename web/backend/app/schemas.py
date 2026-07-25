@@ -326,6 +326,7 @@ class SubmissionDetail(ApiModel):
 
     question_id: int | None
     question_text: str
+    difficulty: int
     image_url: str | None
     options: list[str]
     option_groups: list[OptionGroupResponse] | None = None

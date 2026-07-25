@@ -171,6 +171,7 @@ class SubmissionAnswer(Base):
         ForeignKey("questions.id", ondelete="SET NULL"), nullable=True
     )
     question_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     options: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     selected: Mapped[str] = mapped_column(String(64), nullable=False)
