@@ -3,6 +3,8 @@ import type {
   AnswerKey,
   DifficultyMode,
   FontReference,
+  QuestionStats,
+  FontReferenceSection,
   PageResult,
   Question,
   QuestionPayload,
@@ -104,7 +106,15 @@ interface RawFontReference {
   image_url: string;
   note: string;
   difficulty: number;
+  sort_order: number;
   created_at: string;
+}
+
+interface RawFontReferenceSection {
+  id: number;
+  name: string;
+  sort_order: number;
+  cards: RawFontReference[];
 }
 
 interface RawPage<T> {
@@ -241,15 +251,25 @@ function mapFontReference(item: RawFontReference): FontReference {
     imageUrl: item.image_url,
     note: item.note,
     difficulty: item.difficulty,
+    sortOrder: item.sort_order,
     createdAt: item.created_at,
+  };
+}
+
+function mapSection(raw: RawFontReferenceSection): FontReferenceSection {
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    sortOrder: raw.sort_order,
+    cards: raw.cards.map(mapFontReference),
   };
 }
 
 export const api = {
   getQuizSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/quiz/settings')),
 
-  listFontReferences: async (): Promise<FontReference[]> =>
-    (await request<RawFontReference[]>('/font-references')).map(mapFontReference),
+  listFontReferences: async (): Promise<FontReferenceSection[]> =>
+    (await request<RawFontReferenceSection[]>('/font-references')).map(mapSection),
 
   createAttempt: async (mode: DifficultyMode): Promise<QuizAttempt> => {
     const raw = await request<RawAttempt>('/quiz/attempts', { method: 'POST', body: JSON.stringify({ mode }) });
@@ -276,6 +296,15 @@ export const api = {
   logout: (): Promise<void> => request<void>('/admin/logout', { method: 'POST' }),
 
   getAdminSession: async (): Promise<AdminSession> => sessionFrom(await request<RawSession>('/admin/session')),
+
+  getStatistics: async (): Promise<QuestionStats> => {
+    const raw = await request<{ total: number; by_difficulty: { difficulty: number; count: number }[]; by_font: { option_id: number; option_name: string; group_name: string; count: number }[] }>('/admin/statistics');
+    return {
+      total: raw.total,
+      byDifficulty: raw.by_difficulty.map((d) => ({ difficulty: d.difficulty, count: d.count })),
+      byFont: raw.by_font.map((f) => ({ optionId: String(f.option_id), optionName: f.option_name, groupName: f.group_name, count: f.count })),
+    };
+  },
 
   listQuestions: async (page: number, query?: string, difficulties?: number[], sortBy?: string, sortOrder?: string): Promise<PageResult<Question>> => {
     const search = new URLSearchParams(queryString({ page, query, sort_by: sortBy, sort_order: sortOrder }).slice(1));
@@ -362,25 +391,28 @@ export const api = {
     return request('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
   },
 
-  createFontReference: async (data: Pick<FontReference, 'title' | 'imageUrl' | 'note'> & { difficulty?: number }): Promise<FontReference> =>
-    mapFontReference(await request<RawFontReference>('/admin/font-references', {
-      method: 'POST',
-      body: JSON.stringify({ title: data.title, image_url: data.imageUrl, note: data.note, difficulty: data.difficulty ?? 1 }),
-    })),
+  getFontReferenceSections: async (): Promise<FontReferenceSection[]> =>
+    (await request<RawFontReferenceSection[]>('/admin/font-reference-sections')).map(mapSection),
 
-  updateFontReference: async (id: string, data: Partial<Pick<FontReference, 'title' | 'imageUrl' | 'note' | 'difficulty'>>): Promise<FontReference> =>
-    mapFontReference(await request<RawFontReference>(`/admin/font-references/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+  saveFontReferenceSections: async (sections: FontReferenceSection[]): Promise<FontReferenceSection[]> =>
+    (await request<RawFontReferenceSection[]>('/admin/font-reference-sections', {
+      method: 'PUT',
       body: JSON.stringify({
-        ...(data.title !== undefined ? { title: data.title } : {}),
-        ...(data.imageUrl !== undefined ? { image_url: data.imageUrl } : {}),
-        ...(data.note !== undefined ? { note: data.note } : {}),
-        ...(data.difficulty !== undefined ? { difficulty: data.difficulty } : {}),
+        sections: sections.map((section) => ({
+          id: Number(section.id) || undefined,
+          name: section.name,
+          sort_order: section.sortOrder,
+          cards: section.cards.map((card) => ({
+            id: Number(card.id) || undefined,
+            title: card.title,
+            image_url: card.imageUrl,
+            note: card.note,
+            difficulty: card.difficulty,
+            sort_order: card.sortOrder,
+          })),
+        })),
       }),
-    })),
-
-  deleteFontReference: (id: string): Promise<void> =>
-    request<void>(`/admin/font-references/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    })).map(mapSection),
 
   getAdminSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/admin/settings')),
 

@@ -83,6 +83,10 @@ export interface AdminSession {
   expiresAt: string;
 }
 
+export interface DifficultyStat { difficulty: number; count: number; }
+export interface FontStat { optionId: string; optionName: string; groupName: string; count: number; }
+export interface QuestionStats { total: number; byDifficulty: DifficultyStat[]; byFont: FontStat[]; }
+
 export interface QuestionPayload {
   text: string;
   imageUrl: string | null;
@@ -91,11 +95,19 @@ export interface QuestionPayload {
   explanation: string;
 }
 
+export interface FontReferenceSection {
+  id: string;
+  name: string;
+  sortOrder: number;
+  cards: FontReference[];
+}
+
 export interface FontReference {
   id: string;
   title: string;
   imageUrl: string;
   note: string;
   difficulty: number;
+  sortOrder: number;
   createdAt: string;
 }

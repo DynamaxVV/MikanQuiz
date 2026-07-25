@@ -2,10 +2,17 @@
 
 from datetime import datetime, timezone
 
+from pypinyin import lazy_pinyin
+
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON
+
+
+def to_pinyin(name: str) -> str:
+    """Convert a Chinese name to its pinyin representation for sorting."""
+    return "".join(lazy_pinyin(name))
 
 
 def utc_now() -> datetime:
@@ -40,6 +47,7 @@ class FontOption(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("option_groups.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    pinyin: Mapped[str | None] = mapped_column(String(500), nullable=True)
     font_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     minimum_difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -95,7 +103,19 @@ class FontReference(Base):
     image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     note: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    section_id: Mapped[int | None] = mapped_column(ForeignKey("font_reference_sections.id"), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class FontReferenceSection(Base):
+    """An administrator-managed display section for font reference cards."""
+
+    __tablename__ = "font_reference_sections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Admin(Base):

@@ -17,7 +17,7 @@ from app.config import AppSettings
 from app.database import get_session
 from app.errors import ApiError
 from app.logging import log_event
-from app.models import Admin, AdminSession, FontOption, FontReference, Question, Submission, as_utc, utc_now
+from app.models import Admin, AdminSession, FontOption, FontReference, FontReferenceSection, Question, Submission, as_utc, utc_now
 from app.schemas import (
     AdminCredentials,
     AdminSessionResponse,
@@ -26,8 +26,10 @@ from app.schemas import (
     AttemptCreated,
     AttemptCurrent,
     AttemptSubmit,
+    FontReferenceCatalogUpdate,
     FontReferenceResponse,
-    FontReferenceUpdate,
+    FontReferenceSectionResponse,
+    OptionCatalogUpdate,
     FontReferenceWrite,
     OptionCatalogUpdate,
     OptionGroupResponse,
@@ -39,6 +41,7 @@ from app.schemas import (
     QuestionPage,
     QuestionPatch,
     QuestionResponse,
+    QuestionStats,
     QuestionWrite,
     SettingsResponse,
     StrategyUpdate,
@@ -145,19 +148,27 @@ def font_reference_response(item: FontReference) -> FontReferenceResponse:
         image_url=item.image_url,
         note=item.note,
         difficulty=item.difficulty,
+        sort_order=item.sort_order,
         created_at=as_utc(item.created_at),
     )
 
 
-@router.get("/font-references", response_model=list[FontReferenceResponse])
+@router.get("/font-references", response_model=list[FontReferenceSectionResponse])
 def list_font_references(
     session: Session = Depends(get_session),
-) -> list[FontReferenceResponse]:
-    """Return public font comparison cards in stable creation order."""
-    items = session.scalars(
-        select(FontReference).order_by(FontReference.created_at.desc(), FontReference.id.desc())
-    ).all()
-    return [font_reference_response(item) for item in items]
+) -> list[FontReferenceSectionResponse]:
+    """Return public font comparison cards grouped by section."""
+    sections = question_service.font_reference_sections(session)
+    result: list[FontReferenceSectionResponse] = []
+    for section in sections:
+        cards = question_service._font_reference_cards(session, section.id)
+        result.append(FontReferenceSectionResponse(
+            id=section.id,
+            name=section.name,
+            sort_order=section.sort_order,
+            cards=[font_reference_response(item) for item in cards],
+        ))
+    return result
 
 
 @router.post("/quiz/attempts", response_model=AttemptCreated, status_code=201)
@@ -321,7 +332,7 @@ def list_admin_questions(
     page_size: int = Query(default=20, ge=1, le=100),
     query: str | None = Query(default=None, max_length=500),
     difficulty: list[Annotated[int, Query(ge=1, le=3)]] | None = Query(default=None),
-    sort_by: str = Query(default="updated_at", pattern="^(id|difficulty|text|updated_at)$"),
+    sort_by: str = Query(default="updated_at", pattern="^(id|difficulty|text|updated_at|answer)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     _: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -428,79 +439,48 @@ async def upload_admin_font(
     return ImageUploadResponse(image_url=font_url)
 
 
-@router.post(
-    "/admin/font-references",
-    response_model=FontReferenceResponse,
-    status_code=201,
-)
-def create_font_reference(
-    data: FontReferenceWrite,
+@router.get("/admin/font-reference-sections", response_model=list[FontReferenceSectionResponse])
+def get_font_reference_catalog(
+    _: AdminAuth = Depends(require_admin), session: Session = Depends(get_session)
+) -> list[FontReferenceSectionResponse]:
+    """Return the full font reference catalogue for editing."""
+    sections = question_service.font_reference_sections(session)
+    result: list[FontReferenceSectionResponse] = []
+    for section in sections:
+        cards = question_service._font_reference_cards(session, section.id)
+        result.append(FontReferenceSectionResponse(
+            id=section.id,
+            name=section.name,
+            sort_order=section.sort_order,
+            cards=[font_reference_response(item) for item in cards],
+        ))
+    return result
+
+
+@router.put("/admin/font-reference-sections", response_model=list[FontReferenceSectionResponse])
+def put_font_reference_catalog(
+    data: FontReferenceCatalogUpdate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-) -> FontReferenceResponse:
-    """Create one public comparison card after administrator upload."""
-    item = FontReference(title=data.title, image_url=data.image_url, note=data.note, difficulty=data.difficulty)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
+) -> list[FontReferenceSectionResponse]:
+    """Save the complete font reference catalogue."""
+    sections = question_service.replace_font_reference_catalog(session, data)
+    result: list[FontReferenceSectionResponse] = []
+    for section in sections:
+        cards = question_service._font_reference_cards(session, section.id)
+        result.append(FontReferenceSectionResponse(
+            id=section.id,
+            name=section.name,
+            sort_order=section.sort_order,
+            cards=[font_reference_response(item) for item in cards],
+        ))
     log_event(
-        "font_reference_created",
+        "font_reference_catalog_replaced",
         admin_username=auth.admin.username,
-        reference_id=item.id,
+        section_count=len(data.sections),
+        card_count=sum(len(section.cards) for section in data.sections),
     )
-    return font_reference_response(item)
-
-
-@router.patch(
-    "/admin/font-references/{reference_id}",
-    response_model=FontReferenceResponse,
-)
-def update_font_reference(
-    reference_id: int,
-    data: FontReferenceUpdate,
-    auth: AdminAuth = Depends(require_admin),
-    session: Session = Depends(get_session),
-) -> FontReferenceResponse:
-    """Update one comparison card's fields."""
-    item = session.get(FontReference, reference_id)
-    if item is None:
-        raise ApiError(404, "FONT_REFERENCE_NOT_FOUND", "字体对照图不存在")
-    if data.title is not None:
-        item.title = data.title
-    if data.image_url is not None:
-        item.image_url = data.image_url
-    if data.note is not None:
-        item.note = data.note
-    if data.difficulty is not None:
-        item.difficulty = data.difficulty
-    session.commit()
-    session.refresh(item)
-    log_event(
-        "font_reference_updated",
-        admin_username=auth.admin.username,
-        reference_id=item.id,
-    )
-    return font_reference_response(item)
-
-
-@router.delete("/admin/font-references/{reference_id}", status_code=204)
-def delete_font_reference(
-    reference_id: int,
-    auth: AdminAuth = Depends(require_admin),
-    session: Session = Depends(get_session),
-) -> Response:
-    """Unpublish and remove one comparison image record."""
-    item = session.get(FontReference, reference_id)
-    if item is None:
-        raise ApiError(404, "FONT_REFERENCE_NOT_FOUND", "字体对照图不存在")
-    session.delete(item)
-    session.commit()
-    log_event(
-        "font_reference_deleted",
-        admin_username=auth.admin.username,
-        reference_id=reference_id,
-    )
-    return Response(status_code=204)
+    return result
 
 
 @router.patch("/admin/questions/{question_id:int}", response_model=QuestionResponse)
@@ -633,6 +613,16 @@ def get_option_catalog(
 ) -> list[OptionGroupResponse]:
     """Return the catalogue used by both the editor and public quiz snapshots."""
     return catalogue(session)
+
+
+@router.get("/admin/statistics", response_model=QuestionStats)
+def get_question_statistics(
+    _: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> QuestionStats:
+    """Return question counts grouped by difficulty and by correct font option."""
+    data = question_service.question_stats(session)
+    return QuestionStats(**data)
 
 
 def _collect_font_urls(session: Session) -> set[str]:

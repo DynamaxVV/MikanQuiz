@@ -22,13 +22,12 @@ class RandomSource(Protocol):
 def create_attempt(session: Session, mode: str, random_source: RandomSource | None = None) -> tuple[str, QuizAttempt, list[PublicQuestion]]:
     settings = get_settings(session)
     weights = settings.modes[mode]
-    effective_difficulty = {"beginner": 1, "proficient": 2, "challenge": 3}[mode]
     selected = select_questions(session.scalars(select(Question)).all(), settings.question_count, weights, random_source)
     if any(question.correct_option_id is None for question in selected):
         raise ApiError(409, "QUESTION_FONT_MISSING", "题库有题目的正确字体已被删除，请管理员修复后再开始练习")
     snapshots = []
     for question in selected:
-        snapshot = public_question(session, question, effective_difficulty).model_dump(mode="json")
+        snapshot = public_question(session, question).model_dump(mode="json")
         snapshot["correct_option_id"] = question.correct_option_id
         snapshot["explanation"] = question.explanation
         snapshots.append(snapshot)

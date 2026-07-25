@@ -4,9 +4,12 @@ from sqlalchemy import func, select, asc, desc
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
-from app.models import FontOption, OptionGroup, Question, QuizSettings
+from app.models import FontOption, FontReference, FontReferenceSection, OptionGroup, Question, QuizSettings, to_pinyin
 from app.schemas import (
     FontOptionWrite,
+    FontReferenceCatalogUpdate,
+    FontReferenceSectionWrite,
+    FontReferenceWrite,
     OptionCatalogUpdate,
     QuestionPatch,
     QuestionWrite,
@@ -94,10 +97,42 @@ def list_questions(session: Session, page: int, page_size: int, query: str | Non
         statement = statement.where(Question.difficulty.in_(difficulties))
         count_statement = count_statement.where(Question.difficulty.in_(difficulties))
     total = int(session.scalar(count_statement))
-    sort_column = getattr(Question, sort_by, Question.updated_at)
     order_fn = desc if sort_order == "desc" else asc
-    items = session.scalars(statement.order_by(order_fn(sort_column), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    if sort_by == "answer":
+        statement = statement.join(FontOption, Question.correct_option_id == FontOption.id, isouter=True)
+        sort_column = FontOption.pinyin.nulls_last()
+        secondary = FontOption.name.nulls_last()
+        items = session.scalars(statement.order_by(order_fn(sort_column), order_fn(secondary), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    else:
+        sort_column = getattr(Question, sort_by, Question.updated_at)
+        items = session.scalars(statement.order_by(order_fn(sort_column), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
     return items, total
+
+
+def question_stats(session: Session) -> dict:
+    """Return question counts grouped by difficulty and by correct font option."""
+    total = int(session.scalar(select(func.count()).select_from(Question)))
+    # by difficulty
+    rows = session.execute(select(Question.difficulty, func.count()).group_by(Question.difficulty)).all()
+    counts = {d: 0 for d in (1, 2, 3)}
+    for difficulty, count in rows:
+        counts[difficulty] = count
+    by_difficulty = [{"difficulty": d, "count": counts[d]} for d in (1, 2, 3)]
+    # by font option (LEFT JOIN to include options with 0 questions)
+    font_rows = session.execute(
+        select(
+            FontOption.id,
+            FontOption.name,
+            OptionGroup.name,
+            func.count(Question.id),
+        )
+        .join(OptionGroup, FontOption.group_id == OptionGroup.id)
+        .outerjoin(Question, FontOption.id == Question.correct_option_id)
+        .group_by(FontOption.id)
+        .order_by(OptionGroup.sort_order, OptionGroup.id, FontOption.sort_order, FontOption.id)
+    ).all()
+    by_font = [{"option_id": r[0], "option_name": r[1], "group_name": r[2], "count": r[3]} for r in font_rows]
+    return {"total": total, "by_difficulty": by_difficulty, "by_font": by_font}
 
 
 def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> list[OptionGroup]:
@@ -143,11 +178,14 @@ def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> li
 
 def _upsert_option(session: Session, option: FontOption | None, group_id: int, data: FontOptionWrite) -> None:
     """Create or update one option without inventing a second write abstraction."""
+    name = data.name.strip()
+    py = to_pinyin(name)
     if option is None:
-        session.add(FontOption(group_id=group_id, name=data.name.strip(), font_url=data.font_url, minimum_difficulty=data.minimum_difficulty, sort_order=data.sort_order))
+        session.add(FontOption(group_id=group_id, name=name, pinyin=py, font_url=data.font_url, minimum_difficulty=data.minimum_difficulty, sort_order=data.sort_order))
         return
     option.group_id = group_id
-    option.name = data.name.strip()
+    option.name = name
+    option.pinyin = py
     option.font_url = data.font_url
     option.minimum_difficulty = data.minimum_difficulty
     option.sort_order = data.sort_order
@@ -160,6 +198,69 @@ def update_strategy(session: Session, data: StrategyUpdate, settings: QuizSettin
     session.commit()
     session.refresh(settings)
     return settings
+
+
+def font_reference_sections(session: Session) -> list[FontReferenceSection]:
+    """Read font reference sections in stable order."""
+    return session.scalars(
+        select(FontReferenceSection).order_by(FontReferenceSection.sort_order, FontReferenceSection.id)
+    ).all()
+
+
+def _font_reference_cards(session: Session, section_id: int) -> list[FontReference]:
+    """Read cards for one section ordered by sort_order."""
+    return session.scalars(
+        select(FontReference)
+        .where(FontReference.section_id == section_id)
+        .order_by(FontReference.sort_order, FontReference.id)
+    ).all()
+
+
+def replace_font_reference_catalog(session: Session, payload: FontReferenceCatalogUpdate) -> list[FontReferenceSection]:
+    """Replace the entire font reference catalogue in one atomic operation."""
+    existing_sections = {item.id: item for item in font_reference_sections(session)}
+    existing_cards = {item.id: item for item in session.scalars(select(FontReference)).all()}
+    incoming_section_ids = {item.id for item in payload.sections if item.id is not None}
+    incoming_card_ids = {item.id for section in payload.sections for item in section.cards if item.id is not None}
+    missing_section_ids = set(existing_sections) - incoming_section_ids
+    missing_card_ids = set(existing_cards) - incoming_card_ids
+    for section_data in payload.sections:
+        section = existing_sections.get(section_data.id) if section_data.id else None
+        if section is None:
+            section = FontReferenceSection(name=section_data.name.strip(), sort_order=section_data.sort_order)
+            session.add(section)
+            session.flush()
+        else:
+            section.name = section_data.name.strip()
+            section.sort_order = section_data.sort_order
+        for card_data in section_data.cards:
+            card = existing_cards.get(card_data.id) if card_data.id else None
+            if card is None:
+                session.add(FontReference(
+                    title=card_data.title.strip(),
+                    image_url=card_data.image_url.strip(),
+                    note=card_data.note.strip(),
+                    difficulty=card_data.difficulty,
+                    section_id=section.id,
+                    sort_order=card_data.sort_order,
+                ))
+            else:
+                card.title = card_data.title.strip()
+                card.image_url = card_data.image_url.strip()
+                card.note = card_data.note.strip()
+                card.difficulty = card_data.difficulty
+                card.section_id = section.id
+                card.sort_order = card_data.sort_order
+    for card_id in missing_card_ids:
+        session.delete(existing_cards[card_id])
+    for section_id in missing_section_ids:
+        section = existing_sections[section_id]
+        section_cards = _font_reference_cards(session, section_id)
+        for card in section_cards:
+            session.delete(card)
+        session.delete(section)
+    session.commit()
+    return font_reference_sections(session)
 
 
 def _question_values(question: Question) -> dict[str, object]:

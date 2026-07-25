@@ -174,10 +174,12 @@ class ImageUploadResponse(ApiModel):
 class FontReferenceWrite(ApiModel):
     """One administrator-maintained public font comparison card."""
 
+    id: int | None = None
     title: str = Field(min_length=1, max_length=100)
     image_url: str = Field(min_length=1, max_length=2048)
     note: str = Field(default="", max_length=500)
     difficulty: int = Field(default=1, ge=1, le=3)
+    sort_order: int = Field(ge=0, le=10000)
 
     @field_validator("title", mode="after")
     @classmethod
@@ -213,16 +215,30 @@ class FontReferenceResponse(ApiModel):
     image_url: str
     note: str
     difficulty: int
+    sort_order: int
     created_at: datetime
 
 
-class FontReferenceUpdate(ApiModel):
-    """Partial update for a font comparison card."""
+class FontReferenceSectionWrite(ApiModel):
+    """One editable section and its cards."""
 
-    title: str | None = Field(default=None, max_length=100)
-    image_url: str | None = Field(default=None, max_length=2048)
-    note: str | None = Field(default=None, max_length=500)
-    difficulty: int | None = Field(default=None, ge=1, le=3)
+    id: int | None = None
+    name: str = Field(min_length=1, max_length=100)
+    sort_order: int = Field(ge=0, le=10000)
+    cards: list[FontReferenceWrite] = Field(default_factory=list)
+
+
+class FontReferenceSectionResponse(ApiModel):
+    id: int
+    name: str
+    sort_order: int
+    cards: list[FontReferenceResponse]
+
+
+class FontReferenceCatalogUpdate(ApiModel):
+    """The complete font reference catalogue, saved as one atomic operation."""
+
+    sections: list[FontReferenceSectionWrite] = Field(min_length=0, max_length=50)
 
 
 class PublicQuestion(ApiModel):
@@ -242,6 +258,24 @@ class QuestionPage(ApiModel):
     page: int
     page_size: int
     total: int
+
+
+class DifficultyStat(ApiModel):
+    difficulty: int
+    count: int
+
+
+class FontStat(ApiModel):
+    option_id: int
+    option_name: str
+    group_name: str
+    count: int
+
+
+class QuestionStats(ApiModel):
+    total: int
+    by_difficulty: list[DifficultyStat]
+    by_font: list[FontStat]
 
 
 class SettingsResponse(ApiModel):

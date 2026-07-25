@@ -6,3 +6,4 @@ alembic==1.16.5
 pwdlib[argon2]==0.2.1
 python-multipart==0.0.20
 httpx>=0.27
+pypinyin>=0.55
