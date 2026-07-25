@@ -20,6 +20,15 @@ const total = computed(() => attempt.value?.questions.length ?? 0);
 const answeredCount = computed(() => Object.keys(answers.value).length);
 const modeLabel = computed(() => ({ beginner: '新手级', proficient: '熟练级', challenge: '挑战级' }[attempt.value?.mode ?? 'beginner']));
 
+const answerPanelRef = ref<HTMLElement | null>(null);
+const imageMaxHeight = ref('540px');
+
+function syncImageHeight(): void {
+  if (!answerPanelRef.value) return;
+  const answerHeight = answerPanelRef.value.getBoundingClientRect().height;
+  if (answerHeight > 0) imageMaxHeight.value = `${Math.round(answerHeight * 0.75)}px`;
+}
+
 const fontRenderEnabled = ref(localStorage.getItem('hanzipen-font-render') === '1');
 
 const difficultyCap = computed(() => {
@@ -84,8 +93,13 @@ function chooseWithGuard(optionId: string): void {
 }
 
 
-function previous(): void { currentIndex.value = Math.max(0, currentIndex.value - 1); missingNotice.value = ''; }
-function next(): void { currentIndex.value = Math.min(total.value - 1, currentIndex.value + 1); missingNotice.value = ''; }
+function previous(): void { currentIndex.value = Math.max(0, currentIndex.value - 1); missingNotice.value = ''; scrollToTop(); }
+function next(): void { currentIndex.value = Math.min(total.value - 1, currentIndex.value + 1); missingNotice.value = ''; scrollToTop(); }
+
+function scrollToTop(): void {
+  if (window.innerWidth > 1023) return;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function choose(answer: AnswerKey): void {
   if (!currentQuestion.value) return;
@@ -128,8 +142,8 @@ function restart(): void {
   void router.push('/levels');
 }
 
-onMounted(() => { void loadAttempt(); window.addEventListener('keydown', onKeydown); });
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
+onMounted(() => { void loadAttempt(); window.addEventListener('keydown', onKeydown); syncImageHeight(); window.addEventListener('resize', syncImageHeight); });
+onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window.removeEventListener('resize', syncImageHeight); });
 </script>
 
 <template>
@@ -151,9 +165,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
           <section class="question-panel card">
             <p class="eyebrow">第 {{ currentIndex + 1 }} 题</p>
             <h1>{{ currentQuestion.text }}</h1>
-            <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" />
+            <QuestionMedia class="quiz-media" :image-url="currentQuestion.imageUrl" :text="currentQuestion.text" :style="{ '--quiz-media-max-h': imageMaxHeight }" />
           </section>
-          <section class="answer-panel" aria-label="答案选项">
+          <section ref="answerPanelRef" class="answer-panel" aria-label="答案选项">
             <label class="font-render-toggle">
               <span class="toggle-label">即时渲染字体</span>
               <span class="toggle-track" :class="{ on: fontRenderEnabled }" @click.prevent="toggleFontRender" @keydown.enter.prevent="toggleFontRender" @keydown.space.prevent="toggleFontRender" role="switch" :aria-checked="fontRenderEnabled" tabindex="0">
@@ -208,12 +222,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .quiz-layout { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); gap: 28px; padding: 28px 0 64px; }
 .question-panel { padding: 28px; }
 .question-panel h1 { margin: 0 0 24px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.3; letter-spacing: -.015em; }
-.quiz-media :deep(.image-button) { height: min(62vh, 540px); max-height: none; }
+.quiz-media :deep(.image-button) { height: min(56vh, var(--quiz-media-max-h, 520px)); }
 .answer-panel { position: sticky; top: 18px; align-self: start; padding: 8px 0; }
 .answers { display: grid; gap: 8px; }
 .option-group { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 14px; background: #fffdf9; }
 .option-group h2 { margin: 0 0 4px; color: #85451e; font-size: 14px; }
-.option-group button { display: inline-flex; align-items: center; justify-content: center; margin: 0 5px 5px 0; border: 1px solid transparent; border-radius: 10px; padding: 0 7px; height: 34px; line-height: 1; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; }
+.option-group button { display: inline-flex; align-items: center; justify-content: center; margin: 0 5px 5px 0; border: 1px solid transparent; border-radius: 10px; padding: 0 7px; height: 34px; line-height: 1; color: var(--color-text-muted); background: var(--color-surface-warm); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .option-group button:hover { border-color: #edcfac; color: #85451e; background: #fff8ed; }
 .option-group button.selected { border-color: #d58a45; color: #85451e; background: #fff0d8; }
 .option-group button:focus-visible { outline: 3px solid rgba(213, 138, 69, .3); outline-offset: 2px; }
@@ -226,7 +240,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .restart-row { display: flex; justify-content: flex-end; margin-top: 14px; }
 .restart { border: 0; padding: 4px 0; background: transparent; font-size: 13px; }
 .restart:hover { color: var(--color-action-hover); text-decoration: underline; }
-@media (max-width: 1023px) { .quiz-layout { grid-template-columns: 1fr; }.answer-panel { position: static; }.progress { width: 160px; } }
+@media (max-width: 1023px) { .quiz-layout { grid-template-columns: 1fr; }.answer-panel { position: static; }.progress { width: 160px; }.quiz-media :deep(.image-button) { height: min(38vh, var(--quiz-media-max-h, 300px)); } }
 @media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); }.quiz-header { grid-template-columns: 1fr auto; padding: 10px 0; }.quiz-status { grid-row: 2; }.progress { grid-row: 2; width: 120px; }.question-panel { padding: 20px; }.quiz-layout { padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .progress span { transition: none; } }
 
