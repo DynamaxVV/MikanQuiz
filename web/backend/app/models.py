@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 
-from pypinyin import lazy_pinyin
-
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -12,6 +10,8 @@ from sqlalchemy.types import JSON
 
 def to_pinyin(name: str) -> str:
     """Convert a Chinese name to its pinyin representation for sorting."""
+    from pypinyin import lazy_pinyin
+
     return "".join(lazy_pinyin(name))
 
 
