@@ -1,6 +1,6 @@
 """Question CRUD, option catalogue and singleton settings operations."""
 
-from sqlalchemy import func, select, asc, desc, text
+from sqlalchemy import func, select, asc, desc, text, case
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
@@ -100,9 +100,10 @@ def list_questions(session: Session, page: int, page_size: int, query: str | Non
     order_fn = desc if sort_order == "desc" else asc
     if sort_by == "answer":
         statement = statement.join(FontOption, Question.correct_option_id == FontOption.id, isouter=True)
-        sort_column = FontOption.pinyin.nulls_last()
-        secondary = FontOption.name.nulls_last()
-        items = session.scalars(statement.order_by(order_fn(sort_column), order_fn(secondary), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+        null_push = case((FontOption.id.is_(None), 1), else_=0)
+        sort_column = FontOption.pinyin
+        secondary = FontOption.name
+        items = session.scalars(statement.order_by(null_push, order_fn(sort_column), order_fn(secondary), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
     else:
         sort_column = getattr(Question, sort_by, Question.updated_at)
         items = session.scalars(statement.order_by(order_fn(sort_column), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()

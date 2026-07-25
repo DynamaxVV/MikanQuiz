@@ -462,9 +462,14 @@ def put_font_reference_catalog(
     data: FontReferenceCatalogUpdate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> list[FontReferenceSectionResponse]:
     """Save the complete font reference catalogue."""
+    old_urls = {row[0] for row in session.execute(select(FontReference.image_url).where(FontReference.image_url.isnot(None), FontReference.image_url != "")).all()}
     sections = question_service.replace_font_reference_catalog(session, data)
+    new_urls = {row[0] for row in session.execute(select(FontReference.image_url).where(FontReference.image_url.isnot(None), FontReference.image_url != "")).all()}
+    for url in old_urls - new_urls:
+        image_service.delete_r2_object(settings, url)
     result: list[FontReferenceSectionResponse] = []
     for section in sections:
         cards = question_service._font_reference_cards(session, section.id)
