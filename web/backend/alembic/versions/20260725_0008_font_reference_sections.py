@@ -21,6 +21,13 @@ def upgrade() -> None:
         batch.add_column(sa.Column("section_id", sa.Integer(), nullable=True))
         batch.add_column(sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"))
         batch.create_foreign_key("fk_font_ref_section", "font_reference_sections", ["section_id"], ["id"])
+    # Migrate existing cards into a default section
+    conn = op.get_bind()
+    has_rows = conn.execute(sa.text("SELECT COUNT(*) FROM font_references")).scalar()
+    if has_rows:
+        conn.execute(sa.text("INSERT INTO font_reference_sections (name, sort_order) VALUES ('嵌字笔记', 0)"))
+        section_id = conn.execute(sa.text("SELECT id FROM font_reference_sections LIMIT 1")).scalar()
+        conn.execute(sa.text(f"UPDATE font_references SET section_id = {section_id}, sort_order = id WHERE section_id IS NULL"))
 
 
 def downgrade() -> None:
