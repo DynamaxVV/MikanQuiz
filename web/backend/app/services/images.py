@@ -67,11 +67,23 @@ def ensure_configured(settings: AppSettings) -> None:
         raise ApiError(503, "IMAGE_UPLOAD_UNCONFIGURED", "R2 地址配置无效")
 
 
-def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: str | None = None) -> str:
+def upload_json(settings: AppSettings, key: str, data: dict | list) -> str:
+    """Upload a JSON document to R2 with no-cache policy."""
+    ensure_configured(settings)
+    content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    with NamedTemporaryFile(suffix=".json", mode="wb") as f:
+        f.write(content)
+        f.flush()
+        return run_uploader(settings, f.name, "application/json", key=key, cache_control="no-cache")
+
+
+def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: str | None = None, cache_control: str | None = None) -> str:
     """Invoke the local adapter and expose only its JSON public URL result."""
     payload: dict[str, object] = {"filePath": file_path, "contentType": content_type, "endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "publicBaseUrl": settings.r2_public_base_url}
     if key is not None:
         payload["key"] = key
+    if cache_control is not None:
+        payload["cacheControl"] = cache_control
     try:
         result = run(["node", str(UPLOADER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=30)
         return json.loads(result.stdout)["imageUrl"]

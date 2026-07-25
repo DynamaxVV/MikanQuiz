@@ -52,6 +52,7 @@ from app.services import admin as admin_service
 from app.services import images as image_service
 from app.services import questions as question_service
 from app.services import quiz as quiz_service
+from app.services import sync as sync_service
 from app.services.serializers import (
     admin_question,
     catalogue,
@@ -354,12 +355,14 @@ def create_admin_question(
     data: QuestionWrite,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionResponse:
     """Create one validated question from the PC editor form."""
     question = question_service.create_question(session, data)
     log_event(
         "question_created", admin_username=auth.admin.username, question_id=question.id
     )
+    sync_service.sync_question(session, settings, question.id)
     return admin_question(session, question)
 
 
@@ -486,6 +489,7 @@ def put_font_reference_catalog(
         section_count=len(data.sections),
         card_count=sum(len(section.cards) for section in data.sections),
     )
+    sync_service.sync_notes(session, settings)
     return result
 
 
@@ -495,6 +499,7 @@ def patch_admin_question(
     data: QuestionPatch,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionResponse:
     """Apply a validated partial edit while preserving fixed option invariants."""
     question = question_service.get_question(session, question_id)
@@ -502,6 +507,7 @@ def patch_admin_question(
     log_event(
         "question_updated", admin_username=auth.admin.username, question_id=updated.id
     )
+    sync_service.sync_question(session, settings, updated.id)
     return admin_question(session, updated)
 
 
@@ -510,6 +516,7 @@ def delete_admin_question(
     question_id: int,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> Response:
     """Remove a current question without erasing immutable historical snapshots."""
     question = question_service.get_question(session, question_id)
@@ -517,6 +524,8 @@ def delete_admin_question(
     log_event(
         "question_deleted", admin_username=auth.admin.username, question_id=question_id
     )
+    sync_service.delete_question_sync(settings, question_id)
+    sync_service.sync_question_snapshot(session, settings)
     return Response(status_code=204)
 
 
@@ -564,6 +573,7 @@ def import_admin_questions(
     data: QuestionImportPayload,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionImportResult:
     """Bulk-import questions from a JSON file exported by the same endpoint."""
     created = 0
@@ -597,6 +607,7 @@ def import_admin_questions(
         created=created,
         failed=failed,
     )
+    sync_service.sync_question_snapshot(session, settings)
     return QuestionImportResult(
         total=len(data.questions),
         created=created,
