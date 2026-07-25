@@ -2,11 +2,13 @@
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '@/api/client';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import AdminShell from '@/components/AdminShell.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import type { FontReference, FontReferenceSection } from '@/types';
 
 const sections = ref<FontReferenceSection[]>([]);
+const { markSaved } = useUnsavedGuard(() => sections.value.map((s) => ({ id: s.id, name: s.name, sortOrder: s.sortOrder, cards: s.cards.map((c) => ({ id: c.id, title: c.title, imageUrl: c.imageUrl, note: c.note, difficulty: c.difficulty, sortOrder: c.sortOrder })) })));
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
@@ -23,7 +25,7 @@ function newCard(): FontReference {
 async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
-  try { sections.value = await api.getFontReferenceSections(); }
+  try { sections.value = await api.getFontReferenceSections(); markSaved(); }
   catch (caught) { error.value = caught instanceof Error ? caught.message : '嵌字笔记加载失败。'; }
   finally { loading.value = false; }
 }
@@ -113,7 +115,7 @@ function sectionDragStart(event: DragEvent, sectionIndex: number): void {
   setSectionDragImage(event, sectionIndex);
 }
 
-function sectionDrop(event: DragEvent, targetIndex: number): void {
+function sectionDrop(_event: DragEvent, targetIndex: number): void {
   if (draggedCard.value) {
     const { sectionIndex: srcSecIdx, cardIndex: srcCardIdx } = draggedCard.value;
     const srcSection = sections.value[srcSecIdx];
@@ -185,6 +187,7 @@ async function save(): Promise<void> {
     });
     sections.value = await api.saveFontReferenceSections(sections.value);
     ElMessage.success('嵌字笔记已保存');
+    markSaved();
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '嵌字笔记保存失败。'; }
   finally { saving.value = false; }
 }

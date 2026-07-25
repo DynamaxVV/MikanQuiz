@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api } from '@/api/client';
 import { useFontRendering } from '@/composables/useFontRendering';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import AdminShell from '@/components/AdminShell.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import type { OptionGroup, QuestionPayload } from '@/types';
@@ -42,6 +43,7 @@ function setLocalImage(file: File): void {
 }
 
 const form = reactive<QuestionPayload>({ text: '请选择以下日文对应的汉字字体', imageUrl: null, difficulty: 2, correctOptionId: '', explanation: '' });
+const { markSaved } = useUnsavedGuard(() => ({ text: form.text, imageUrl: form.imageUrl, difficulty: form.difficulty, correctOptionId: form.correctOptionId, explanation: form.explanation }));
 const visibleGroups = computed(() => groups.value.map((group) => ({ ...group, options: group.options.filter((option) => option.minimumDifficulty <= form.difficulty) })).filter((group) => group.options.length));
 
 const leftGroupNames = ['类黑', '类宋', '类圆', '类黑体', '类宋体', '类圆体'];
@@ -55,6 +57,7 @@ async function load(): Promise<void> {
     const [catalog, question] = await Promise.all([api.getOptionGroups(), editing.value ? api.getQuestion(id.value) : Promise.resolve(null)]);
     groups.value = catalog;
     if (question) Object.assign(form, { text: question.text, imageUrl: question.imageUrl, difficulty: question.difficulty, correctOptionId: question.correctOptionId || '', explanation: question.explanation || '' });
+    markSaved();
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '题目编辑器加载失败。'; }
   finally { loading.value = false; }
 }
@@ -113,6 +116,7 @@ async function save(): Promise<void> {
       await load();
     } else {
       resetForm();
+      markSaved();
     }
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '保存失败。'; }
   finally { saving.value = false; }

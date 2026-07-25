@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '@/api/client';
 import { useFontRendering } from '@/composables/useFontRendering';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import AdminShell from '@/components/AdminShell.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import type { FontOption, OptionGroup } from '@/types';
@@ -10,6 +11,7 @@ import type { FontOption, OptionGroup } from '@/types';
 const { fontStyle } = useFontRendering();
 const protectedGroupNames = ['类黑', '类宋', '类圆', '类黑体', '类宋体', '类圆体'];
 const groups = ref<OptionGroup[]>([]);
+const { markSaved } = useUnsavedGuard(() => groups.value.map((g) => ({ id: g.id, name: g.name, sortOrder: g.sortOrder, options: g.options.map((o) => ({ id: o.id, name: o.name, fontUrl: o.fontUrl ?? null, minimumDifficulty: o.minimumDifficulty, sortOrder: o.sortOrder })) })));
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
@@ -24,7 +26,7 @@ function newOption(index: number): FontOption {
 async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
-  try { groups.value = await api.getOptionGroups(); }
+  try { groups.value = await api.getOptionGroups(); markSaved(); }
   catch (caught) { error.value = caught instanceof Error ? caught.message : '字体快捷项加载失败。'; }
   finally { loading.value = false; }
 }
@@ -137,6 +139,7 @@ async function save(): Promise<void> {
     });
     groups.value = await api.saveOptionGroups(groups.value);
     ElMessage.success('字体快捷项已保存');
+    markSaved();
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '字体快捷项保存失败。'; }
   finally { saving.value = false; }
 }

@@ -2,15 +2,19 @@
 
 ## Project Overview
 
-MikanQuiz: Chinese character/font quiz system with WeChat miniprogram + PC Web sharing a FastAPI backend.
+MikanQuiz: Chinese character/font quiz system with a Vue 3 Web frontend and FastAPI backend.
+
+## Miniprogram (Deprecated)
+
+The `miniprogram/` and `cloudfunctions/quiz/` directories contain the original WeChat miniprogram client. **It is no longer maintained.** New features, bug fixes, and UI work should only target the Web frontend (`web/`). Do not add miniprogram compatibility when building new functionality.
 
 ## Directory Structure
 
-- `miniprogram/` — WeChat miniprogram (pages, services, components)
-- `cloudfunctions/quiz/` — WeChat cloud functions (legacy, still in use)
 - `web/frontend/` — Vue 3 + Vite Web frontend (TypeScript)
 - `web/backend/` — FastAPI + SQLite backend (Python)
 - `web/r2-uploader/` — Cloudflare R2 image upload adapter (Node.js)
+- `miniprogram/` — ~~WeChat miniprogram~~ (deprecated, frozen)
+- `cloudfunctions/quiz/` — ~~WeChat cloud functions~~ (deprecated, frozen)
 
 ## Development Commands
 
@@ -50,9 +54,6 @@ cd web/frontend && npm install
 ### Verification Commands
 
 ```sh
-# Miniprogram API client check
-cd miniprogram && npm run check
-
 # Backend tests
 cd web/backend && .venv/bin/python -m pytest tests -q
 
@@ -64,7 +65,7 @@ cd web/frontend && npm run test:api-contract && npm run build
 
 - **Database**: SQLite with WAL mode, single Uvicorn worker, Alembic migrations (never `create_all()`)
 - **API**: All endpoints use `/api/v1` prefix, JSON, snake_case fields
-- **Auth**: Web uses HttpOnly cookies; miniprogram uses Bearer tokens; admin accounts managed via CLI only
+- **Auth**: Web uses HttpOnly cookies; admin accounts managed via CLI only
 - **Images**: Uploaded to Cloudflare R2 via server-side adapter; database stores public HTTPS URLs
 - **Image upload flow**: On the question editor page, selected/pasted images are stored locally and shown as blob: URL previews. Upload to R2 happens together with question save, not immediately on selection. The save button shows a loading spinner and the form is disabled during save.
 
@@ -84,5 +85,4 @@ cd web/frontend && npm run test:api-contract && npm run build
 - Backend must have `.venv` created and activated before running
 - Database migrations must run before starting backend (`alembic upgrade head`)
 - Web frontend proxies `/api` to backend in dev mode
-- Miniprogram API URL configured in `miniprogram/config/api.js` (must be HTTPS)
 - When adding admin API routes with static paths under `/admin/questions/` (e.g. `/export`, `/import`), register them **before** `{question_id}` routes, or use `{question_id:int}` path pattern to prevent routing conflicts
