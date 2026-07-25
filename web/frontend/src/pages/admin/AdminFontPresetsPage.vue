@@ -208,24 +208,24 @@ onMounted(() => { void load(); });
 .loading { padding: 22px; }
 .catalog { display: grid; gap: 12px; }
 .group-card { display: grid; grid-template-columns: 172px minmax(0, 1fr); padding: 0; overflow: hidden; }
-.group-header { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; padding: 16px; border-right: 1px solid #efdbc1; background: var(--color-surface-accent); }
+.group-header { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; padding: 12px; border-right: 1px solid #efdbc1; background: var(--color-surface-accent); }
 .group-header label, .difficulty-label { display: grid; gap: 5px; color: var(--color-text-muted); font-size: 12px; font-weight: 750; }
-.group-header input { width: 100%; border: 0; border-bottom: 1px solid #d8b789; padding: 5px 0; color: var(--color-text); background: transparent; font-size: 16px; font-weight: 750; }
-.option-list { display: grid; padding: 2px 16px; }
-.option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 104px 108px 26px; align-items: end; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--color-border); transition: opacity .2s; }
+.group-header input { width: 100%; border: 0; border-bottom: 1px solid #d8b789; padding: 5px 0; color: var(--color-text); background: transparent; font-size: 15px; font-weight: 750; }
+.option-list { display: grid; padding: 2px 12px; }
+.option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 104px 108px 26px; align-items: end; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--color-border); transition: opacity .2s; }
 .option-row.is-uploading { opacity: .65; }
 .option-row[draggable=true] { cursor: grab; }
 .option-row:active { cursor: grabbing; }
 .drag-mark { display: grid; width: 20px; height: 30px; place-items: center; color: #9a652d; font-size: 17px; line-height: 1; }
-.option-row > input, select { height: 42px; line-height: 1; border: 1px solid var(--color-border); border-radius: 12px; padding: 0 9px; color: var(--color-text); background: var(--color-surface-warm); font-size: 13px; }
+.option-row > input, select { height: 36px; line-height: 1; border: 1px solid var(--color-border); border-radius: 10px; padding: 0 8px; color: var(--color-text); background: var(--color-surface-warm); font-size: 12px; }
 /* font upload area */
 .font-upload { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.font-upload-btn { width: 100%; height: 42px; border: 1px dashed #d7aa73; border-radius: 12px; padding: 0 6px; color: #9a652d; background: transparent; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background .15s; }
+.font-upload-btn { width: 100%; height: 36px; border: 1px dashed #d7aa73; border-radius: 10px; padding: 0 6px; color: #9a652d; background: transparent; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background .15s; }
 .font-upload-btn:hover { background: #fdf3e4; }
 .font-upload-btn:disabled { opacity: .5; cursor: not-allowed; }
 .font-progress { width: 100%; height: 4px; border-radius: 2px; background: #ede1cf; overflow: hidden; }
 .font-progress-bar { height: 100%; border-radius: 2px; background: var(--color-action); transition: width .2s ease; }
-.font-file { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; height: 42px; border: 1px solid #78b63c; border-radius: 12px; padding: 0 8px; background: #ecf8df; }
+.font-file { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; height: 36px; border: 1px solid #78b63c; border-radius: 10px; padding: 0 8px; background: #ecf8df; }
 .font-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3e6b14; font-size: 11px; font-weight: 650; }
 .font-clear-btn { flex-shrink: 0; min-height: 24px; border: 1px solid #b8d99a; border-radius: 6px; padding: 0 8px; color: #5a8a2f; background: #fff; font-size: 11px; font-weight: 650; cursor: pointer; transition: background .15s; }
 .font-clear-btn:hover { background: #fefefc; }
