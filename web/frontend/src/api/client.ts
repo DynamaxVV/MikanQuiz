@@ -302,7 +302,7 @@ export const api = {
     return {
       total: raw.total,
       byDifficulty: raw.by_difficulty.map((d) => ({ difficulty: d.difficulty, count: d.count })),
-      byFont: raw.by_font.map((f) => ({ optionId: String(f.option_id), optionName: f.option_name, count: f.count })),
+      byFont: raw.by_font.map((f) => ({ optionId: String(f.option_id), optionName: f.option_name, count: f.count })).sort((a, b) => b.count - a.count),
     };
   },
 

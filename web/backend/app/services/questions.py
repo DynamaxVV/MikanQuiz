@@ -1,6 +1,6 @@
 """Question CRUD, option catalogue and singleton settings operations."""
 
-from sqlalchemy import func, select, asc, desc
+from sqlalchemy import func, select, asc, desc, text
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
@@ -123,11 +123,11 @@ def question_stats(session: Session) -> dict:
         select(
             FontOption.id,
             FontOption.name,
-            func.count(Question.id),
+            func.count(Question.id).label("cnt"),
         )
         .outerjoin(Question, FontOption.id == Question.correct_option_id)
         .group_by(FontOption.id)
-        .order_by(func.count(Question.id).desc())
+        .order_by(text("cnt DESC"))
     ).all()
     by_font = [{"option_id": r[0], "option_name": r[1], "count": r[2]} for r in font_rows]
     return {"total": total, "by_difficulty": by_difficulty, "by_font": by_font}
