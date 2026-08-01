@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import type { FontOption } from '@/types';
 
-type FontStatus = { family: string; state: 'loading' | 'ready' | 'failed' };
+type FontState = 'idle' | 'loading' | 'ready' | 'failed' | 'missing';
+type FontStatus = { family: string; state: Exclude<FontState, 'idle' | 'missing'> };
 
 const fontStates = ref(new Map<string, FontStatus>());
 const fontFamilies = new Map<string, string>();
@@ -53,5 +54,10 @@ export function useFontRendering() {
     options.forEach((option) => { void loadFont(option); });
   }
 
-  return { fontError, fontStyle, preloadFonts };
+  function fontState(option: Pick<FontOption, 'fontUrl'>): FontState {
+    if (!option.fontUrl) return 'missing';
+    return fontStates.value.get(option.fontUrl)?.state ?? 'idle';
+  }
+
+  return { fontError, fontState, fontStyle, preloadFonts };
 }

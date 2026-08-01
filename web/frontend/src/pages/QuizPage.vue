@@ -11,7 +11,7 @@ import type { AnswerKey, FontOption } from '@/types';
 const route = useRoute();
 const router = useRouter();
 const { attempt, answers, error, loading, submitting, completed, clearSavedAttempt, restore, selectAnswer, submit } = useAttempt();
-const { fontError, fontStyle, preloadFonts } = useFontRendering();
+const { fontError, fontState, fontStyle, preloadFonts } = useFontRendering();
 const currentIndex = ref(0);
 const missingNotice = ref('');
 const displayName = computed(() => localStorage.getItem('hanzipen-display-name')?.trim() ?? '');
@@ -55,11 +55,13 @@ const previewAbove = ref(false);
 const previewLeft = ref(0);
 const previewBottom = ref(0);
 const previewTop = ref(0);
+const previewState = computed(() => previewFont.value ? fontState(previewFont.value) : 'idle');
 let pressTimer: ReturnType<typeof setTimeout> | null = null;
 let didLongPress = false;
 
 function onOptionPointerDown(option: FontOption, event: PointerEvent): void {
   if (!option.fontUrl) { fontError.value = '该字体尚未上传字体文件，无法预览。'; return; }
+  preloadFonts([option]);
   didLongPress = false;
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const above = rect.top > window.innerHeight / 2;
@@ -199,13 +201,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
     <div
       v-if="previewFont"
       class="font-preview-tooltip"
-      :style="{
-        ...fontStyle(previewFont),
-        left: previewLeft + 'px',
-        fontSize: '200%',
-        ...(previewAbove ? { bottom: previewBottom + 'px' } : { top: previewTop + 'px' }),
-      }"
-    >{{ previewFont.name }}</div>
+      :style="{ left: previewLeft + 'px', ...(previewAbove ? { bottom: previewBottom + 'px' } : { top: previewTop + 'px' }) }"
+    ><span v-if="previewState === 'loading' || previewState === 'idle'" class="font-preview-loading" aria-label="字体加载中"><i></i>字体加载中</span><span v-else-if="previewState === 'ready'" :style="{ ...fontStyle(previewFont), fontSize: '200%' }">{{ previewFont.name }}</span><span v-else class="font-preview-failed">字体加载失败</span></div>
   </Teleport>
 </template>
 
@@ -297,4 +294,5 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
   pointer-events: none;
   box-shadow: 0 6px 20px rgba(73, 48, 26, 0.18);
 }
+.font-preview-loading { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }.font-preview-loading i { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius:50%; animation: font-loading-spin .7s linear infinite; }.font-preview-failed { color: #ffd5cd; font-size: 13px; }@keyframes font-loading-spin { to { transform: rotate(360deg); } }@media (prefers-reduced-motion: reduce) { .font-preview-loading i { animation: none; } }
 </style>
