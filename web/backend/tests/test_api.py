@@ -336,6 +336,64 @@ def test_admin_questions_accept_multiple_difficulty_filters(client: TestClient) 
     assert {item["difficulty"] for item in listed.json()["items"]} == {1, 3}
 
 
+def test_admin_question_font_filter_and_navigation(client: TestClient) -> None:
+    """Keep pagination and detail navigation in the same filtered result set."""
+    headers = admin_headers(client)
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    other = next(group for group in catalog if group["name"] == "其他")
+    other["options"] = [
+        {"name": "甲", "minimum_difficulty": 1, "sort_order": 0},
+        {"name": "乙", "minimum_difficulty": 1, "sort_order": 1},
+    ]
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    options = {item["name"]: item["id"] for group in catalog for item in group["options"]}
+    created: list[int] = []
+    for text, option_id in (("第一题", options["甲"]), ("第二题", options["甲"]), ("第三题", options["甲"]), ("其他题", options["乙"])):
+        response = client.post("/api/v1/admin/questions", headers=headers, json={
+            "text": text, "image_url": "https://images.example.test/question.png",
+            "difficulty": 1, "correct_option_id": option_id, "explanation": "解析",
+        })
+        assert response.status_code == 201, response.text
+        created.append(response.json()["id"])
+    filtered = client.get(f"/api/v1/admin/questions?page=2&page_size=2&correct_option_id={options['甲']}&sort_by=id&sort_order=asc", headers=headers)
+    assert filtered.status_code == 200, filtered.text
+    assert filtered.json()["total"] == 3
+    assert [item["id"] for item in filtered.json()["items"]] == [created[2]]
+    middle = client.get(f"/api/v1/admin/questions/{created[1]}/navigation?correct_option_id={options['甲']}&sort_by=id&sort_order=asc", headers=headers)
+    assert middle.status_code == 200, middle.text
+    assert middle.json() == {"previous_id": created[0], "next_id": created[2], "position": 2, "total": 3}
+
+
+def test_font_stream_rejects_bad_upstream_content(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Do not return an HTML error page as a seemingly successful font file."""
+    class FakeResponse:
+        headers = {"content-type": "text/html"}
+        content = b"<html>missing</html>"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def get(self, _: str) -> FakeResponse:
+            return FakeResponse()
+
+    client.app.state.settings = AppSettings(
+        database_url=client.app.state.settings.database_url,
+        cookie_secure=False,
+        r2_public_base_url="https://images.example.test",
+    )
+    monkeypatch.setattr("app.api.httpx.AsyncClient", lambda **_: FakeClient())
+    response = client.get("/api/v1/fonts/stream?url=https%3A%2F%2Fimages.example.test%2Ffont.ttf")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_FONT"
+
+
 def test_deleting_font_marks_question_for_repair(client: TestClient) -> None:
     """A removed correct font leaves the question editable and blocks new attempts."""
     headers, questions = configure_two_question_quiz(client)

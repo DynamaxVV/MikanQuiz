@@ -1,42 +1,57 @@
+import { ref } from 'vue';
 import type { FontOption } from '@/types';
 
-const loadedFamilies = new Map<string, string>();
-const pendingRules: string[] = [];
-let styleElement: HTMLStyleElement | null = null;
+type FontStatus = { family: string; state: 'loading' | 'ready' | 'failed' };
+
+const fontStates = ref(new Map<string, FontStatus>());
+const fontFamilies = new Map<string, string>();
+const fontError = ref('');
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
 
-function flushFontRules(): void {
-  if (!pendingRules.length) return;
-  if (!styleElement) {
-    styleElement = document.createElement('style');
-    document.head.appendChild(styleElement);
+function setFontState(url: string, state: FontStatus): void {
+  const next = new Map(fontStates.value);
+  next.set(url, state);
+  fontStates.value = next;
+}
+
+function familyFor(url: string): string {
+  const existing = fontFamilies.get(url);
+  if (existing) return existing;
+  const family = `fp-${fontFamilies.size + 1}`;
+  fontFamilies.set(url, family);
+  return family;
+}
+
+async function loadFont(option: Pick<FontOption, 'fontUrl'>): Promise<void> {
+  if (!option.fontUrl) return;
+  const current = fontStates.value.get(option.fontUrl);
+  if (current?.state === 'loading' || current?.state === 'ready') return;
+  const family = familyFor(option.fontUrl);
+  setFontState(option.fontUrl, { family, state: 'loading' });
+  try {
+    const proxyUrl = `${API_BASE}/fonts/stream?url=${encodeURIComponent(option.fontUrl)}`;
+    const face = new FontFace(family, `url("${proxyUrl}")`);
+    await face.load();
+    document.fonts.add(face);
+    setFontState(option.fontUrl, { family, state: 'ready' });
+    fontError.value = '';
+  } catch {
+    setFontState(option.fontUrl, { family, state: 'failed' });
+    fontError.value = '字体加载失败，已使用系统字体。';
   }
-  styleElement.textContent = pendingRules.join('\n');
 }
 
 export function useFontRendering() {
-  function fontFamily(option: Pick<FontOption, 'fontUrl'>): string | undefined {
-    if (!option.fontUrl) return undefined;
-    let family = loadedFamilies.get(option.fontUrl);
-    if (!family) {
-      family = `fp-${crypto.randomUUID().slice(0, 8)}`;
-      loadedFamilies.set(option.fontUrl, family);
-      const proxyUrl = `${API_BASE}/fonts/stream?url=${encodeURIComponent(option.fontUrl)}`;
-      pendingRules.push(`@font-face{font-family:'${family}';src:url('${proxyUrl}');font-weight:normal;font-style:normal;font-display:swap}`);
-    }
-    return family;
-  }
-
   function fontStyle(option: Pick<FontOption, 'fontUrl'>): Record<string, string> {
-    const family = fontFamily(option);
-    if (family) flushFontRules();
-    return family ? { fontFamily: `'${family}', sans-serif` } : {};
+    if (!option.fontUrl) return {};
+    const status = fontStates.value.get(option.fontUrl);
+    if (!status) void loadFont(option);
+    return status?.state === 'ready' ? { fontFamily: `'${status.family}', sans-serif` } : {};
   }
 
   function preloadFonts(options: Pick<FontOption, 'fontUrl'>[]): void {
-    for (const option of options) fontFamily(option);
-    flushFontRules();
+    options.forEach((option) => { void loadFont(option); });
   }
 
-  return { fontFamily, fontStyle, preloadFonts };
+  return { fontError, fontStyle, preloadFonts };
 }

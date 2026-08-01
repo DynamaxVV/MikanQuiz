@@ -146,7 +146,7 @@ async function onImageInput(event: Event, card: FontReference): Promise<void> {
   }
   uploading.value = true;
   try {
-    card.imageUrl = await api.uploadImage(file, 'notes');
+    card.imageUrl = await api.uploadPrefixedImage(file, 'notes');
     ElMessage.success('图片已上传');
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : '图片上传失败');
@@ -168,7 +168,7 @@ function onPaste(event: ClipboardEvent, card: FontReference): void {
       const ext = blob.type.split('/')[1] || 'png';
       const file = new File([blob], `clipboard.${ext}`, { type: blob.type });
       uploading.value = true;
-      api.uploadImage(file, 'notes')
+      api.uploadPrefixedImage(file, 'notes')
         .then((url) => { card.imageUrl = url; ElMessage.success('图片已粘贴并上传'); })
         .catch((caught) => { ElMessage.error(caught instanceof Error ? caught.message : '图片上传失败'); })
         .finally(() => { uploading.value = false; });

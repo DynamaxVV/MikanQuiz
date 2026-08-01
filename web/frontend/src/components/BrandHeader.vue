@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '@/api/client';
 
@@ -10,7 +10,6 @@ const displayName = ref(localStorage.getItem('hanzipen-display-name') ?? '');
 const editing = ref(false);
 const draftName = ref(displayName.value);
 const dialog = ref<HTMLDialogElement>();
-const hasAdminSession = ref(false);
 
 function openNameEditor(): void {
   draftName.value = displayName.value;
@@ -23,13 +22,9 @@ function saveName(): void {
   editing.value = false;
 }
 
-function goToAdmin(): void {
-  void router.push(hasAdminSession.value ? '/admin/questions' : '/admin/login');
-}
-
-async function restoreAdminSession(): Promise<void> {
-  try { await api.getAdminSession(); hasAdminSession.value = true; }
-  catch { hasAdminSession.value = false; }
+async function goToAdmin(): Promise<void> {
+  try { await api.getAdminSession(); await router.push('/admin/questions'); }
+  catch { await router.push('/admin/login'); }
 }
 
 watch(editing, async (open) => {
@@ -41,7 +36,6 @@ watch(editing, async (open) => {
   }
 });
 
-onMounted(() => { void restoreAdminSession(); });
 </script>
 
 <template>
@@ -53,7 +47,7 @@ onMounted(() => { void restoreAdminSession(); });
       <button class="name-button" type="button" @click="openNameEditor">
         {{ displayName || '设置昵称' }}
       </button>
-      <button class="admin-button" type="button" @click="goToAdmin">{{ hasAdminSession ? '进入管理页' : '管理员登录' }}</button>
+      <button class="admin-button" type="button" @click="goToAdmin">管理员登录</button>
     </div>
   </header>
 

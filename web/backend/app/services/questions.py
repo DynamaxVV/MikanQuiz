@@ -86,28 +86,47 @@ def delete_question(session: Session, question: Question) -> None:
     session.commit()
 
 
-def list_questions(session: Session, page: int, page_size: int, query: str | None, difficulties: list[int] | None, sort_by: str = "updated_at", sort_order: str = "desc") -> tuple[list[Question], int]:
-    """Return a stable, bounded question page with optional filters and sorting."""
-    statement = select(Question)
-    count_statement = select(func.count()).select_from(Question)
+def _filtered_question_statement(statement, query: str | None, difficulties: list[int] | None, correct_option_id: int | None):
+    """Apply the filters shared by question lists and their detail navigation."""
     if query:
         statement = statement.where(Question.text.contains(query.strip()))
-        count_statement = count_statement.where(Question.text.contains(query.strip()))
     if difficulties:
         statement = statement.where(Question.difficulty.in_(difficulties))
-        count_statement = count_statement.where(Question.difficulty.in_(difficulties))
-    total = int(session.scalar(count_statement))
+    if correct_option_id is not None:
+        statement = statement.where(Question.correct_option_id == correct_option_id)
+    return statement
+
+
+def _ordered_question_statement(statement, sort_by: str, sort_order: str):
+    """Apply one stable order to every consumer of the admin question result set."""
     order_fn = desc if sort_order == "desc" else asc
     if sort_by == "answer":
-        statement = statement.join(FontOption, Question.correct_option_id == FontOption.id, isouter=True)
         null_push = case((FontOption.id.is_(None), 1), else_=0)
-        sort_column = FontOption.pinyin
-        secondary = FontOption.name
-        items = session.scalars(statement.order_by(null_push, order_fn(sort_column), order_fn(secondary), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
-    else:
-        sort_column = getattr(Question, sort_by, Question.updated_at)
-        items = session.scalars(statement.order_by(order_fn(sort_column), Question.id.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+        return statement.join(FontOption, Question.correct_option_id == FontOption.id, isouter=True).order_by(
+            null_push, order_fn(FontOption.pinyin), order_fn(FontOption.name), Question.id.desc()
+        )
+    return statement.order_by(order_fn(getattr(Question, sort_by, Question.updated_at)), Question.id.desc())
+
+
+def list_questions(session: Session, page: int, page_size: int, query: str | None, difficulties: list[int] | None, correct_option_id: int | None = None, sort_by: str = "updated_at", sort_order: str = "desc") -> tuple[list[Question], int]:
+    """Return a stable, bounded question page with optional filters and sorting."""
+    statement = _filtered_question_statement(select(Question), query, difficulties, correct_option_id)
+    count_statement = _filtered_question_statement(select(func.count()).select_from(Question), query, difficulties, correct_option_id)
+    total = int(session.scalar(count_statement))
+    items = session.scalars(_ordered_question_statement(statement, sort_by, sort_order).offset((page - 1) * page_size).limit(page_size)).all()
     return items, total
+
+
+def question_navigation(session: Session, question_id: int, query: str | None, difficulties: list[int] | None, correct_option_id: int | None, sort_by: str, sort_order: str) -> dict[str, int | None]:
+    """Find adjacent IDs in the exact result set shown by the admin list."""
+    statement = _filtered_question_statement(select(Question.id), query, difficulties, correct_option_id)
+    # PONETAIL: navigation reads matching IDs once; replace with SQL windows if the catalog grows large.
+    ids = list(session.scalars(_ordered_question_statement(statement, sort_by, sort_order)))
+    try:
+        index = ids.index(question_id)
+    except ValueError as error:
+        raise ApiError(404, "QUESTION_NOT_IN_RESULT", "题目不在当前筛选结果中") from error
+    return {"previous_id": ids[index - 1] if index else None, "next_id": ids[index + 1] if index + 1 < len(ids) else None, "position": index + 1, "total": len(ids)}
 
 
 def question_stats(session: Session) -> dict:

@@ -38,6 +38,7 @@ from app.schemas import (
     QuestionExportItem,
     QuestionImportPayload,
     QuestionImportResult,
+    QuestionNavigation,
     QuestionPage,
     QuestionPatch,
     QuestionResponse,
@@ -128,17 +129,22 @@ async def stream_font(
     base = settings.r2_public_base_url.rstrip("/")
     if not url.startswith(base + "/") and url != base:
         raise ApiError(400, "INVALID_FONT_URL", "字体地址无效")
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(url)
-        content_type = resp.headers.get("content-type", "font/ttf")
-        return Response(
-            content=resp.content,
-            media_type=content_type,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=31536000, immutable",
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+    except httpx.HTTPError as error:
+        raise ApiError(502, "FONT_FETCH_FAILED", "字体文件加载失败，请稍后重试") from error
+    content_type = resp.headers.get("content-type", "font/ttf").split(";", 1)[0]
+    image_service.validate_font(resp.content, content_type)
+    return Response(
+        content=resp.content,
+        media_type=content_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
 
 
 def font_reference_response(item: FontReference) -> FontReferenceResponse:
@@ -333,6 +339,7 @@ def list_admin_questions(
     page_size: int = Query(default=20, ge=1, le=100),
     query: str | None = Query(default=None, max_length=500),
     difficulty: list[Annotated[int, Query(ge=1, le=3)]] | None = Query(default=None),
+    correct_option_id: int | None = Query(default=None, gt=0),
     sort_by: str = Query(default="updated_at", pattern="^(id|difficulty|text|updated_at|answer)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     _: AdminAuth = Depends(require_admin),
@@ -340,7 +347,7 @@ def list_admin_questions(
 ) -> QuestionPage:
     """List current questions through server-side filters and bounded pagination."""
     items, total = question_service.list_questions(
-        session, page, page_size, query, difficulty, sort_by, sort_order
+        session, page, page_size, query, difficulty, correct_option_id, sort_by, sort_order
     )
     return QuestionPage(
         items=[admin_question(session, item) for item in items],
@@ -364,6 +371,23 @@ def create_admin_question(
     )
     sync_service.sync_question(session, settings, question.id)
     return admin_question(session, question)
+
+
+@router.get("/admin/questions/{question_id:int}/navigation", response_model=QuestionNavigation)
+def get_admin_question_navigation(
+    question_id: int,
+    query: str | None = Query(default=None, max_length=500),
+    difficulty: list[Annotated[int, Query(ge=1, le=3)]] | None = Query(default=None),
+    correct_option_id: int | None = Query(default=None, gt=0),
+    sort_by: str = Query(default="updated_at", pattern="^(id|difficulty|text|updated_at|answer)$"),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    _: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> QuestionNavigation:
+    """Return adjacent questions inside the current filtered admin list."""
+    return QuestionNavigation(**question_service.question_navigation(
+        session, question_id, query, difficulty, correct_option_id, sort_by, sort_order
+    ))
 
 
 @router.get("/admin/questions/{question_id:int}", response_model=QuestionResponse)

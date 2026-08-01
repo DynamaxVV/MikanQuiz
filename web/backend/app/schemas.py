@@ -260,6 +260,15 @@ class QuestionPage(ApiModel):
     total: int
 
 
+class QuestionNavigation(ApiModel):
+    """The adjacent questions within one filtered, sorted admin result set."""
+
+    previous_id: int | None = None
+    next_id: int | None = None
+    position: int = Field(ge=1)
+    total: int = Field(ge=1)
+
+
 class DifficultyStat(ApiModel):
     difficulty: int
     count: int

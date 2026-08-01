@@ -11,7 +11,7 @@ import type { AnswerKey, FontOption } from '@/types';
 const route = useRoute();
 const router = useRouter();
 const { attempt, answers, error, loading, submitting, completed, clearSavedAttempt, restore, selectAnswer, submit } = useAttempt();
-const { fontStyle } = useFontRendering();
+const { fontError, fontStyle, preloadFonts } = useFontRendering();
 const currentIndex = ref(0);
 const missingNotice = ref('');
 const displayName = computed(() => localStorage.getItem('hanzipen-display-name')?.trim() ?? '');
@@ -44,6 +44,10 @@ const filteredGroups = computed(() => {
 function toggleFontRender(): void {
   fontRenderEnabled.value = !fontRenderEnabled.value;
   localStorage.setItem('hanzipen-font-render', fontRenderEnabled.value ? '1' : '0');
+  if (!fontRenderEnabled.value) return;
+  const options = filteredGroups.value.flatMap((group) => group.options).filter((option) => option.fontUrl);
+  if (!options.length) { fontError.value = '当前题目没有已上传的字体文件，无法即时渲染。'; return; }
+  preloadFonts(options);
 }
 
 const previewFont = ref<FontOption | null>(null);
@@ -55,7 +59,7 @@ let pressTimer: ReturnType<typeof setTimeout> | null = null;
 let didLongPress = false;
 
 function onOptionPointerDown(option: FontOption, event: PointerEvent): void {
-  if (!option.fontUrl) return;
+  if (!option.fontUrl) { fontError.value = '该字体尚未上传字体文件，无法预览。'; return; }
   didLongPress = false;
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const above = rect.top > window.innerHeight / 2;
@@ -171,6 +175,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
             </label>
             <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in filteredGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
             <p class="font-preview-tips">长按字体选项可预览字体效果</p>
+            <p v-if="fontError" class="status-error" role="status">{{ fontError }}</p>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>
             <p v-if="error" class="status-error" role="alert">{{ error }}</p>
             <div class="question-navigation">

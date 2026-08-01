@@ -7,6 +7,7 @@ import type {
   FontReferenceSection,
   PageResult,
   Question,
+  QuestionNavigation,
   QuestionPayload,
   OptionGroup,
   QuizAttempt,
@@ -123,6 +124,8 @@ interface RawPage<T> {
   page_size: number;
   total: number;
 }
+
+interface RawQuestionNavigation { previous_id: number | null; next_id: number | null; position: number; total: number; }
 
 export class ApiError extends Error {
   readonly status: number;
@@ -265,6 +268,14 @@ function mapSection(raw: RawFontReferenceSection): FontReferenceSection {
   };
 }
 
+async function uploadImageFile(file: File, prefix?: string): Promise<string> {
+  const form = new FormData();
+  form.set('image', file);
+  const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : '';
+  const response = await request<{ image_url: string }>(`/admin/images${qs}`, { method: 'POST', body: form });
+  return response.image_url;
+}
+
 export const api = {
   getQuizSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/quiz/settings')),
 
@@ -306,8 +317,8 @@ export const api = {
     };
   },
 
-  listQuestions: async (page: number, query?: string, difficulties?: number[], sortBy?: string, sortOrder?: string): Promise<PageResult<Question>> => {
-    const search = new URLSearchParams(queryString({ page, query, sort_by: sortBy, sort_order: sortOrder }).slice(1));
+  listQuestions: async (page: number, query?: string, difficulties?: number[], correctOptionId?: string, sortBy?: string, sortOrder?: string): Promise<PageResult<Question>> => {
+    const search = new URLSearchParams(queryString({ page, query, correct_option_id: correctOptionId, sort_by: sortBy, sort_order: sortOrder }).slice(1));
     difficulties?.forEach((difficulty) => search.append('difficulty', String(difficulty)));
     const raw = await request<RawPage<RawQuestion>>(`/admin/questions?${search.toString()}`);
     return { items: raw.items.map(mapQuestion), page: raw.page, pageSize: raw.page_size, total: raw.total };
@@ -315,19 +326,22 @@ export const api = {
 
   getQuestion: async (id: string): Promise<Question> => mapQuestion(await request<RawQuestion>(`/admin/questions/${encodeURIComponent(id)}`)),
 
+  getQuestionNavigation: async (id: string, query?: string, difficulties?: number[], correctOptionId?: string, sortBy?: string, sortOrder?: string): Promise<QuestionNavigation> => {
+    const search = new URLSearchParams(queryString({ query, correct_option_id: correctOptionId, sort_by: sortBy, sort_order: sortOrder }).slice(1));
+    difficulties?.forEach((difficulty) => search.append('difficulty', String(difficulty)));
+    const raw = await request<RawQuestionNavigation>(`/admin/questions/${encodeURIComponent(id)}/navigation?${search.toString()}`);
+    return { previousId: raw.previous_id ? String(raw.previous_id) : undefined, nextId: raw.next_id ? String(raw.next_id) : undefined, position: raw.position, total: raw.total };
+  },
+
   createQuestion: async (question: QuestionPayload): Promise<Question> =>
     mapQuestion(await request<RawQuestion>('/admin/questions', { method: 'POST', body: JSON.stringify(toQuestionWrite(question)) })),
 
   updateQuestion: async (id: string, question: QuestionPayload): Promise<Question> =>
     mapQuestion(await request<RawQuestion>(`/admin/questions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(toQuestionWrite(question)) })),
 
-  uploadImage: async (file: File, prefix?: string): Promise<string> => {
-    const form = new FormData();
-    form.set('image', file);
-    const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : '';
-    const response = await request<{ image_url: string }>(`/admin/images${qs}`, { method: 'POST', body: form });
-    return response.image_url;
-  },
+  uploadImage: async (file: File): Promise<string> => uploadImageFile(file),
+
+  uploadPrefixedImage: async (file: File, prefix: string): Promise<string> => uploadImageFile(file, prefix),
 
   uploadFont: (file: File, onProgress?: (pct: number) => void): Promise<string> => {
     if (!onProgress) {

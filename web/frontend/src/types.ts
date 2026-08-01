@@ -64,6 +64,13 @@ export interface PageResult<T> {
   total: number;
 }
 
+export interface QuestionNavigation {
+  previousId?: string;
+  nextId?: string;
+  position: number;
+  total: number;
+}
+
 export interface SubmissionSummary {
   id: string;
   displayName: string;
