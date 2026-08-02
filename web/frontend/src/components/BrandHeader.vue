@@ -40,8 +40,8 @@ watch(editing, async (open) => {
 
 <template>
   <header class="brand-header">
-    <RouterLink v-if="showBrand" class="brand" to="/" aria-label="返回砂糖的秘密小课堂首页">
-      <span>砂糖的秘密小课堂</span>
+    <RouterLink v-if="showBrand" class="brand" to="/" aria-label="返回砂糖橘的秘密小课堂首页">
+      <span>砂糖橘的秘密小课堂</span>
     </RouterLink>
     <div class="header-actions">
       <button class="name-button" type="button" @click="openNameEditor">

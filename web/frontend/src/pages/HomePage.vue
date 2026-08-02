@@ -16,8 +16,8 @@ function beginQuiz(): void {
       <section class="hero" aria-labelledby="home-title">
         <div class="hero-copy">
           <div class="hero-sun" aria-hidden="true"></div>
-          <h1 id="home-title" class="sr-only">砂糖的秘密小课堂</h1>
-          <p class="eyebrow hero-eyebrow">砂糖的秘密小课堂</p>
+          <h1 id="home-title" class="sr-only">砂糖橘的秘密小课堂</h1>
+          <p class="eyebrow hero-eyebrow">砂糖橘的秘密小课堂</p>
           <img class="hero-title" :src="heroTitle" alt="汉字盆" />
           <p class="subtitle">  观察图片，选择最合适的中文字体~</p>
         </div>
