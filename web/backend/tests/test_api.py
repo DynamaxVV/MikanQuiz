@@ -117,6 +117,50 @@ def test_public_attempt_boundary_idempotency_and_snapshot(client: TestClient) ->
     assert snapshot["option_groups"]
 
 
+def test_attempt_options_follow_selected_mode_not_question_difficulty(client: TestClient) -> None:
+    """Expose fonts according to the selected level, even for a one-star question."""
+    headers = admin_headers(client)
+    strategy = {
+        "question_count": 1,
+        "modes": {
+            "beginner": [100, 0, 0],
+            "proficient": [100, 0, 0],
+            "challenge": [100, 0, 0],
+        },
+    }
+    assert client.put("/api/v1/admin/settings/strategy", json=strategy, headers=headers).status_code == 200
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    other = next(group for group in catalog if group["name"] == "其他")
+    other["options"] = [
+        {"name": name, "minimum_difficulty": difficulty, "sort_order": difficulty - 1}
+        for difficulty, name in enumerate(("一星字体", "二星字体", "三星字体"), start=1)
+    ]
+    catalog = client.put("/api/v1/admin/option-groups", json={"groups": catalog}, headers=headers).json()
+    one_star_option = next(option for group in catalog for option in group["options"] if option["name"] == "一星字体")
+    question = client.post(
+        "/api/v1/admin/questions",
+        headers=headers,
+        json={
+            "text": "按答题模式展示字体",
+            "image_url": "https://pan.yurucamp.cn/image.png",
+            "difficulty": 1,
+            "correct_option_id": one_star_option["id"],
+            "explanation": "测试解析",
+        },
+    )
+    assert question.status_code == 201, question.text
+
+    for mode, expected in (("beginner", {1}), ("proficient", {1, 2}), ("challenge", {1, 2, 3})):
+        response = client.post("/api/v1/quiz/attempts", json={"mode": mode})
+        assert response.status_code == 201, response.text
+        visible = {
+            option["minimum_difficulty"]
+            for group in response.json()["questions"][0]["option_groups"]
+            for option in group["options"]
+        }
+        assert visible == expected
+
+
 def test_expired_attempt_cannot_resume_or_submit(
     client: TestClient, database: Database
 ) -> None:

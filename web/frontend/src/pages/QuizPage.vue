@@ -31,7 +31,7 @@ function syncImageHeight(): void {
 
 const fontRenderEnabled = ref(localStorage.getItem('hanzipen-font-render') === '1');
 
-const difficultyCap = computed(() => currentQuestion.value?.difficulty ?? 3);
+const difficultyCap = computed(() => ({ beginner: 1, proficient: 2, challenge: 3 }[attempt.value?.mode ?? 'challenge']));
 
 const filteredGroups = computed(() => {
   if (!currentQuestion.value) return [];

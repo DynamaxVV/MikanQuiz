@@ -15,6 +15,13 @@ from app.services.questions import get_settings
 from app.services.serializers import catalogue, public_question, submission_result
 
 
+MODE_OPTION_DIFFICULTY = {
+    "beginner": 1,
+    "proficient": 2,
+    "challenge": 3,
+}
+
+
 class RandomSource(Protocol):
     def random(self) -> float: ...
 
@@ -25,9 +32,10 @@ def create_attempt(session: Session, mode: str, random_source: RandomSource | No
     selected = select_questions(session.scalars(select(Question)).all(), settings.question_count, weights, random_source)
     if any(question.correct_option_id is None for question in selected):
         raise ApiError(409, "QUESTION_FONT_MISSING", "题库有题目的正确字体已被删除，请管理员修复后再开始练习")
+    option_difficulty = MODE_OPTION_DIFFICULTY[mode]
     snapshots = []
     for question in selected:
-        snapshot = public_question(session, question).model_dump(mode="json")
+        snapshot = public_question(session, question, mode_difficulty=option_difficulty).model_dump(mode="json")
         snapshot["correct_option_id"] = question.correct_option_id
         snapshot["explanation"] = question.explanation
         snapshots.append(snapshot)
