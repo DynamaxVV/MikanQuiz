@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import BrandHeader from '@/components/BrandHeader.vue';
+import mascotArtwork from '@/assets/mascot-study-with-bg.png';
 import heroTitle from '../../../../miniprogram/images/hero-title-hanzipen.png';
 
 const router = useRouter();
@@ -14,23 +15,41 @@ function beginQuiz(): void {
     <div class="content">
       <BrandHeader :show-brand="false" />
       <section class="hero" aria-labelledby="home-title">
-        <div class="hero-copy">
-          <div class="hero-sun" aria-hidden="true"></div>
-          <h1 id="home-title" class="sr-only">砂糖橘的秘密小课堂</h1>
-          <p class="eyebrow hero-eyebrow">砂糖橘的秘密小课堂</p>
-          <img class="hero-title" :src="heroTitle" alt="汉字盆" />
-          <p class="subtitle">  观察图片，选择最合适的中文字体~</p>
+        <div class="hero-main">
+          <div class="hero-copy">
+            <h1 id="home-title" class="sr-only">来和砂糖橘一起学嵌字吧</h1>
+            <p class="eyebrow hero-eyebrow">砂糖橘的秘密小课堂</p>
+            <img
+              class="hero-title"
+              :src="heroTitle"
+              width="1800"
+              height="260"
+              alt="来和砂糖橘一起学嵌字吧"
+              decoding="async"
+            />
+            <p class="subtitle">观察图片，选择最合适的中文字体~</p>
+          </div>
+          <div class="action-stack">
+            <button class="action-card primary-card" type="button" @click="beginQuiz">
+              <span><strong>开始识字挑战</strong><small>选择适合你的题目难度</small></span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <RouterLink class="action-card reference-card" to="/font-reference">
+              <span><strong>嵌字小本本</strong><small>一点点点点也许嵌字会用上的教程</small></span>
+              <span aria-hidden="true">→</span>
+            </RouterLink>
+            <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>
+          </div>
         </div>
-        <div class="action-stack">
-          <button class="action-card primary-card" type="button" @click="beginQuiz">
-            <span><strong>开始识字挑战</strong><small>选择适合你的题目难度</small></span>
-            <span aria-hidden="true">→</span>
-          </button>
-          <RouterLink class="action-card reference-card" to="/font-reference">
-            <span><strong>嵌字小本本</strong><small>一点点点点也许嵌字会用上的教程</small></span>
-            <span aria-hidden="true">→</span>
-          </RouterLink>
-          <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>
+        <div class="hero-artwork">
+          <img
+            class="mascot-artwork"
+            :src="mascotArtwork"
+            width="1322"
+            height="1076"
+            alt="砂糖橘陪伴猫耳女孩一起学习嵌字"
+            decoding="async"
+          />
         </div>
       </section>
     </div>
@@ -40,9 +59,13 @@ function beginQuiz(): void {
 <style scoped>
 .home-page { min-height: 100vh; background: var(--color-bg); }
 .content { width: min(1280px, calc(100% - clamp(48px, 8vw, 128px))); margin: 0 auto; }
-.hero { display: grid; min-height: calc(100vh - 72px); grid-template-columns: minmax(0, 1.38fr) minmax(360px, 1fr); align-items: center; gap: clamp(40px, 7vw, 112px); padding: 40px 0 64px; }
-.hero-copy { --hero-text-inset: 2.1%; position: relative; z-index: 0; max-width: 650px; transform: translateY(-28px); }.hero-sun { position: absolute; z-index: 0; top: clamp(-78px, -6vw, -42px); right: clamp(-92px, -8vw, -44px); width: clamp(150px, 20vw, 260px); aspect-ratio: 1; border-radius: 50%; background: #fff0d2; pointer-events: none; }.hero-title, .subtitle, .hero-eyebrow { position: relative; z-index: 1; }.hero-eyebrow { margin-left: var(--hero-text-inset); }.hero-title { display: block; width: min(100%, 620px); margin-top: 12px; }.subtitle { max-width: 520px; margin: 24px 0 0; padding-left: var(--hero-text-inset); color: var(--color-text-muted); font-size: 18px; line-height: 1.7; text-align: left; }
-.action-stack { position: relative; z-index: 1; display: grid; gap: 16px; align-content: center; }
+.hero { display: grid; min-height: calc(100vh - 72px); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: clamp(32px, 4vw, 64px); padding: 40px 0 64px; }
+.hero-main { min-width: 0; max-width: 620px; }
+.hero-copy { --hero-text-inset: 2.1%; min-width: 0; }
+.hero-eyebrow { margin-left: var(--hero-text-inset); }
+.hero-title { display: block; width: min(100%, 620px); height: auto; margin-top: 12px; }
+.subtitle { max-width: 520px; margin: 24px 0 0; padding-left: var(--hero-text-inset); color: var(--color-text-muted); font-size: 18px; line-height: 1.7; text-align: left; }
+.action-stack { display: grid; gap: 16px; margin-top: 32px; }
 .action-card { display: flex; min-height: 126px; align-items: center; justify-content: space-between; gap: 20px; padding: 26px 28px; border: 1px solid var(--color-border); border-radius: 24px; box-shadow: var(--shadow-card); text-align: left; transition: transform 160ms ease-out, box-shadow 160ms ease-out; }
 .action-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
 .action-card:active { transform: scale(.98); }
@@ -54,7 +77,9 @@ function beginQuiz(): void {
 .reference-card { color: var(--color-text); background: var(--color-surface); }
 .reference-card small { color: var(--color-text-muted); }
 .hint { margin: 18px auto 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.65; text-align: center; }
-@media (max-width: 1023px) { .hero { grid-template-columns: 1fr; gap: 48px; } .hero-copy { transform: none; } .action-stack { max-width: 680px; } }
-@media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); } .hero { min-height: auto; padding-top: 32px; } .hero-title { width: 100%; } .subtitle { font-size: 16px; } .action-card { min-height: 108px; padding: 22px; } }
+.hero-artwork { min-width: 0; }
+.mascot-artwork { display: block; width: 100%; height: auto; filter: drop-shadow(0 18px 32px rgba(116, 72, 20, .10)); transform: rotate(-1deg); }
+@media (max-width: 1023px) { .hero { min-height: auto; grid-template-columns: 1fr; gap: 48px; } .hero-main { width: min(100%, 680px); max-width: none; } .hero-artwork { width: min(100%, 680px); } }
+@media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); } .hero { gap: 32px; padding: 32px 0 48px; } .hero-title { width: 100%; margin-top: 10px; } .subtitle { margin-top: 18px; font-size: 16px; } .action-stack { gap: 12px; margin-top: 24px; } .action-card { min-height: 108px; padding: 22px; } .action-card strong { font-size: 20px; } .action-card small { font-size: 14px; } .hint { margin-top: 14px; } .mascot-artwork { transform: rotate(-.7deg); } }
 @media (prefers-reduced-motion: reduce) { .action-card:hover, .action-card:active { transform: none; } }
 </style>
