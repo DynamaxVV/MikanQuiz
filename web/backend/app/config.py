@@ -17,6 +17,9 @@ class AppSettings:
         r2_bucket: Bucket receiving private server-side uploads.
         r2_public_base_url: HTTPS delivery domain mapped to the bucket.
         log_level: Application and Uvicorn JSON logging threshold.
+        access_log_path: Optional JSONL file for key request and audit events.
+        access_log_max_bytes: Maximum size of the active key-access log before rotation.
+        access_log_backup_count: Number of rotated key-access files to retain.
     """
 
     database_url: str = "sqlite:///./var/quiz.db"
@@ -28,6 +31,18 @@ class AppSettings:
     r2_bucket: str = ""
     r2_public_base_url: str = ""
     log_level: str = "INFO"
+    access_log_path: str = ""
+    access_log_max_bytes: int = 20 * 1024 * 1024
+    access_log_backup_count: int = 14
+
+
+def _parse_log_int(value: str, default: int, minimum: int) -> int:
+    """Parse a bounded logging integer without making startup fail on bad config."""
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed >= minimum else default
 
 
 def load_settings(env_file: Path | None = None) -> AppSettings:
@@ -38,6 +53,17 @@ def load_settings(env_file: Path | None = None) -> AppSettings:
     session_hours = int(get("QUIZ_ADMIN_SESSION_HOURS", "8"))
     cookie_secure = get("QUIZ_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
     log_level = get("QUIZ_LOG_LEVEL", "INFO").upper()
+    access_log_path = get("QUIZ_ACCESS_LOG_PATH").strip()
+    access_log_max_bytes = _parse_log_int(
+        get("QUIZ_ACCESS_LOG_MAX_BYTES", str(20 * 1024 * 1024)),
+        20 * 1024 * 1024,
+        1,
+    )
+    access_log_backup_count = _parse_log_int(
+        get("QUIZ_ACCESS_LOG_BACKUP_COUNT", "14"),
+        14,
+        1,
+    )
     if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
         log_level = "INFO"
     return AppSettings(
@@ -50,6 +76,9 @@ def load_settings(env_file: Path | None = None) -> AppSettings:
         r2_bucket=get("QUIZ_R2_BUCKET"),
         r2_public_base_url=get("QUIZ_R2_PUBLIC_BASE_URL"),
         log_level=log_level,
+        access_log_path=access_log_path,
+        access_log_max_bytes=access_log_max_bytes,
+        access_log_backup_count=access_log_backup_count,
     )
 
 

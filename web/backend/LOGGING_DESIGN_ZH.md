@@ -15,18 +15,21 @@
 
 ## 总体方案
 
-应用使用 Python 标准库 `logging`，将单行 JSON 输出至 stdout。systemd 收集 stdout/stderr，journald 负责索引与轮转；应用自身不写日志文件。
+应用使用 Python 标准库 `logging`，将完整单行 JSON 输出至 stdout；关键访问和审计事件同时写入独立的轮转 JSONL 文件。systemd 收集 stdout/stderr，journald 负责索引与轮转；应用文件只保留可用于访问追溯的事件，不复制所有诊断日志。
 
 ```text
 浏览器 / 小程序
        |
        v
-     Nginx -- X-Forwarded-For --> Uvicorn / FastAPI -- JSON stdout --> systemd-journald
-       |                                                                  |
-       +---------------- Nginx access/error log                           +--> journalctl
+     Nginx -- X-Forwarded-For --> Uvicorn / FastAPI -- JSON stdout --> systemd-journald --> journalctl
+       |                              \
+       |                               +--> quiz-access.jsonl (关键事件，应用轮转)
+       +---------------- Nginx access/error log
 ```
 
 应用关闭 Uvicorn 原生 access log，避免产生一份无 `request_id` 的重复文本日志。Uvicorn 的启动和错误日志也使用同一个 JSON formatter。
+
+关键访问事件文件与 journald 使用相同的 JSON formatter，因此可以直接用 `jq` 查询 IP、请求 ID、答题提交 ID和状态码。
 
 ## 用户 IP 的可信来源（强制）
 
@@ -122,11 +125,11 @@ R2 失败只记录 Python 异常类别（例如 `TimeoutExpired` 或 `CalledProc
 
 ## 实施位置
 
-- `app/logging.py`：JSON formatter、上下文变量、`configure_logging()` 和获取当前请求字段的 helper。
+- `app/logging.py`：JSON formatter、上下文变量、关键事件过滤器、stdout 与轮转文件 handler。
 - `app/main.py`：应用创建时配置 logging，注册请求中间件、预期错误日志和兜底异常日志。
 - `app/api.py`：在登录、登出和管理员写操作、答题创建/提交处记录审计或业务事件。
 - `app/services/images.py`：在 R2 上传的成功与失败处记录安全的上传事件；不得写入上传器原始输出。
-- `app/config.py`：可选的 `QUIZ_LOG_LEVEL`，默认 `INFO`，仅接受 `DEBUG`、`INFO`、`WARNING`、`ERROR`。
+- `app/config.py`：`QUIZ_LOG_LEVEL`、`QUIZ_ACCESS_LOG_PATH`、文件大小和备份数量配置。
 - `tests/`：以自定义内存 handler 或 `caplog` 验证 JSON 字段、关联 ID 和敏感字段缺失。
 
 业务日志通过 `contextvars` 自动附带当前请求的 `request_id`、`client_ip` 和 `user_agent`；路由和服务只传业务字段，避免遗漏上下文或传递 token。
@@ -140,6 +143,7 @@ R2 失败只记录 Python 异常类别（例如 `TimeoutExpired` 或 `CalledProc
 SyslogIdentifier=mikan-quiz-api
 StandardOutput=journal
 StandardError=journal
+Environment=QUIZ_ACCESS_LOG_PATH=/srv/quiz/data/quiz-access.jsonl
 ExecStart=/path/to/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log --proxy-headers --forwarded-allow-ips=127.0.0.1
 ```
 
@@ -160,6 +164,23 @@ sudo systemctl restart systemd-journald
 sudo systemctl daemon-reload
 sudo systemctl restart mikan-quiz-api
 ```
+
+## 独立关键访问日志
+
+当 `QUIZ_ACCESS_LOG_PATH` 非空时，应用将以下事件写入该文件：`http_request`、`quiz_attempt_created`、`quiz_submitted`、`quiz_submission_replayed`、`quiz_business_error`，以及管理员登录、登出和无效会话事件。文件仍是一行一个 JSON，可直接交给 `jq`；默认每个文件 20 MiB，保留当前文件和 14 个 `.1`–`.14` 轮转文件。生产模板将文件放在 `/srv/quiz/data/quiz-access.jsonl`，该目录已包含在 systemd 的 `ReadWritePaths` 中。
+
+```sh
+# 完成过答题的 IP
+jq -r 'select(.event == "quiz_submitted") | [.timestamp, .client_ip, .submission_id, .display_name] | @tsv' \
+  /srv/quiz/data/quiz-access.jsonl
+
+# 轮转文件一起查询
+for file in /srv/quiz/data/quiz-access.jsonl*; do
+  jq -c 'select(.event == "quiz_submitted" or .event == "quiz_submission_replayed")' "$file"
+done
+```
+
+该文件也会按大小轮转并删除超过 `QUIZ_ACCESS_LOG_BACKUP_COUNT` 的旧文件；需要长期保存时，应将 `/srv/quiz/data` 纳入服务器备份或日志归档策略。
 
 ## 排障命令
 
@@ -191,4 +212,4 @@ journalctl -u mikan-quiz-api --since today -o cat |
 3. `ApiError` 会记录稳定错误码，未处理异常会记录 traceback，二者可按 `request_id` 关联。
 4. 管理员登录、题目改动、策略改动、R2 成功/失败、答题创建/提交均产生日志。
 5. 测试断言日志中不含密码、Cookie、Bearer token、答题 token、答题答案或 R2 密钥。
-6. `journalctl -u mikan-quiz-api -o cat` 可直接用 `jq` 按 JSON 字段查询。
+6. `journalctl -u <实际服务名> -o cat` 和 `QUIZ_ACCESS_LOG_PATH` 文件都可直接用 `jq` 按 JSON 字段查询。

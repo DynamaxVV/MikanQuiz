@@ -7,6 +7,8 @@ Type=simple
 User=quiz
 Group=quiz
 WorkingDirectory=/srv/quiz/current/backend
+# Keep key access logs in the persistent, service-writable data directory.
+Environment=QUIZ_ACCESS_LOG_PATH=/srv/quiz/data/quiz-access.jsonl
 EnvironmentFile=/etc/quiz/quiz-api.env
 SyslogIdentifier=mikan-quiz-api
 StandardOutput=journal

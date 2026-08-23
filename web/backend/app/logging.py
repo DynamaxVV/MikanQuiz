@@ -4,12 +4,27 @@ from contextvars import ContextVar, Token
 from datetime import date, datetime, timezone
 import json
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 import sys
 from typing import Any
 
 
 LOGGER_NAME = "mikan_quiz"
 _context: ContextVar[dict[str, Any]] = ContextVar("log_context", default={})
+KEY_ACCESS_EVENTS = frozenset(
+    {
+        "http_request",
+        "quiz_attempt_created",
+        "quiz_submitted",
+        "quiz_submission_replayed",
+        "quiz_business_error",
+        "admin_login_succeeded",
+        "admin_login_failed",
+        "admin_session_invalid",
+        "admin_logout",
+    }
+)
 
 
 class JsonFormatter(logging.Formatter):
@@ -36,15 +51,61 @@ def _json_default(value: Any) -> str:
     return str(value)
 
 
-def configure_logging(level: str) -> None:
-    """Configure JSON output for app and Uvicorn logs without external packages."""
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
-    for name in (LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+class AccessLogFilter(logging.Filter):
+    """Keep only request and security/quiz audit events in the dedicated file."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Accept events whose fields are safe and useful for access review."""
+        return getattr(record, "event", "") in KEY_ACCESS_EVENTS
+
+
+def configure_logging(
+    level: str,
+    access_log_path: str = "",
+    access_log_max_bytes: int = 20 * 1024 * 1024,
+    access_log_backup_count: int = 14,
+) -> None:
+    """Configure JSON stdout logging and an optional rotating access-log file."""
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(JsonFormatter())
+    stdout_handler.setLevel(level)
+    stdout_handler._mikan_quiz_owned = True  # type: ignore[attr-defined]
+    handlers: list[logging.Handler] = [stdout_handler]
+    if access_log_path:
+        path = Path(access_log_path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        access_handler = RotatingFileHandler(
+            path,
+            maxBytes=access_log_max_bytes,
+            backupCount=access_log_backup_count,
+            encoding="utf-8",
+            delay=True,
+        )
+        access_handler.setFormatter(JsonFormatter())
+        access_handler.setLevel(logging.INFO)
+        access_handler.addFilter(AccessLogFilter())
+        access_handler._mikan_quiz_owned = True  # type: ignore[attr-defined]
+        handlers.append(access_handler)
+
+    logger_names = (LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access")
+    old_handlers: dict[int, logging.Handler] = {}
+    for name in logger_names:
+        for old_handler in logging.getLogger(name).handlers:
+            if getattr(old_handler, "_mikan_quiz_owned", False):
+                old_handlers[id(old_handler)] = old_handler
+    for old_handler in old_handlers.values():
+        old_handler.close()
+
+    for name in logger_names:
         logger = logging.getLogger(name)
-        logger.handlers = [handler]
+        logger.handlers = handlers if name == LOGGER_NAME else [stdout_handler]
         logger.propagate = False
-        logger.setLevel(level)
+        logger.disabled = False
+        # Keep INFO access events flowing to the dedicated file even when the
+        # general stdout threshold is WARNING or ERROR.
+        logger.setLevel(
+            ("DEBUG" if level == "DEBUG" else "INFO") if name == LOGGER_NAME else level
+        )
 
 
 def bind_context(**fields: Any) -> Token[dict[str, Any]]:

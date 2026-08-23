@@ -32,6 +32,9 @@ python -m pytest web/backend/tests -q
 | `QUIZ_ADMIN_SESSION_HOURS` | `8` | 管理员 Bearer token 有效期 |
 | `QUIZ_COOKIE_SECURE` | `true` | Web 管理 Cookie 是否只允许 HTTPS；本地测试设为 `false` |
 | `QUIZ_LOG_LEVEL` | `INFO` | 应用 JSON 日志级别；可选 `DEBUG`、`INFO`、`WARNING`、`ERROR` |
+| `QUIZ_ACCESS_LOG_PATH` | 空 | 关键访问/审计事件 JSONL 文件；生产建议 `/srv/quiz/data/quiz-access.jsonl` |
+| `QUIZ_ACCESS_LOG_MAX_BYTES` | `20971520` | 当前文件达到 20 MiB 后轮转 |
+| `QUIZ_ACCESS_LOG_BACKUP_COUNT` | `14` | 额外保留 14 个轮转文件 |
 
 ## API 合约
 
@@ -203,7 +206,7 @@ Web 登录只返回：
 - 令牌和密码原文不会写入数据库；密码使用 Argon2，令牌只保存 SHA-256 摘要。
 - 停用管理员会撤销其全部会话；CLI 拒绝停用最后一个有效管理员。
 - 业务表不写 IP。限流、真实 IP 转发、请求大小和 TLS 由 Nginx 管理。
-- 应用日志为 stdout 的单行 JSON，由 systemd journald 收集；日志含真实用户 IP、请求 ID、管理员审计和 R2 上传事件。部署时安装 `../deploy/mikan-quiz-journald.conf.example`，并使用 `journalctl -u mikan-quiz-api -o cat | jq` 查询。完整字段和隐私边界见 [`LOGGING_DESIGN_ZH.md`](LOGGING_DESIGN_ZH.md)。
+- 应用日志为 stdout 的单行 JSON，由 systemd journald 收集；日志含真实用户 IP、请求 ID、管理员审计和 R2 上传事件。关键 HTTP/答题/管理员认证事件会额外写入 `QUIZ_ACCESS_LOG_PATH` 指定的轮转 JSONL 文件。部署时安装 `../deploy/mikan-quiz-journald.conf.example`，并使用 `journalctl -u <实际服务名> -o cat | jq` 或 `jq` 查询该文件。完整字段和隐私边界见 [`LOGGING_DESIGN_ZH.md`](LOGGING_DESIGN_ZH.md)。
 - `../scripts/backup_sqlite.py` 用 SQLite 在线备份 API 生成快照；`../scripts/migrate_cloud_export.py` 只在完成图片 URL 映射后导入旧云导出数据。
 - `../scripts/cleanup_expired_attempts.py` 由 `quiz-cleanup.timer` 每小时清理过期且未提交的 attempt；已提交记录永不由该任务删除。
 

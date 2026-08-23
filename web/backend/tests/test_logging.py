@@ -2,6 +2,7 @@
 
 import json
 import logging
+from pathlib import Path
 from subprocess import TimeoutExpired
 from uuid import UUID
 
@@ -59,6 +60,24 @@ def test_access_log_has_generated_request_id_and_client_ip(client: TestClient) -
     assert access["user_agent"] == "LogTest/1"
     assert access["path"] == "/api/v1/quiz/settings"
     assert access["status_code"] == 200
+
+
+def test_key_access_events_are_written_to_dedicated_jsonl(client: TestClient) -> None:
+    """Keep request access events in the configured file as JSON lines."""
+    response = client.get("/api/v1/quiz/settings")
+    assert response.status_code == 200
+    path = Path(client.app.state.settings.access_log_path)
+    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    access = next(event for event in records if event["event"] == "http_request")
+    assert access["request_id"] == response.headers["x-request-id"]
+    assert access["client_ip"]
+
+
+def test_non_access_diagnostics_stay_out_of_dedicated_jsonl(client: TestClient) -> None:
+    """Keep unrelated service diagnostics in journald instead of the access file."""
+    log_event("sync_failed", logging.WARNING, entity="question", error="test-only")
+    path = Path(client.app.state.settings.access_log_path)
+    assert not path.exists()
 
 
 def test_error_logging_never_includes_bearer_token_or_password(client: TestClient) -> None:

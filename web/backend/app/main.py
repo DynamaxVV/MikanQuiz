@@ -18,7 +18,12 @@ from app.schemas import HealthResponse
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     """Create an API app without changing production database schema on startup."""
     settings = settings or load_settings()
-    configure_logging(settings.log_level)
+    configure_logging(
+        settings.log_level,
+        access_log_path=settings.access_log_path,
+        access_log_max_bytes=settings.access_log_max_bytes,
+        access_log_backup_count=settings.access_log_backup_count,
+    )
     app = FastAPI(title="砂糖字形课堂 API", version="1.0.5", docs_url="/api/docs")
     app.state.database = Database(settings.database_url)
     app.state.settings = settings

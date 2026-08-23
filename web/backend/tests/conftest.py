@@ -30,7 +30,14 @@ def database_url(tmp_path: Path) -> str:
 @pytest.fixture()
 def client(database_url: str) -> TestClient:
     """Create a migrated app with exactly one CLI-managed test administrator."""
-    app = create_app(AppSettings(database_url=database_url, cookie_secure=False))
+    database_path = Path(database_url.removeprefix("sqlite:///"))
+    app = create_app(
+        AppSettings(
+            database_url=database_url,
+            cookie_secure=False,
+            access_log_path=str(database_path.parent / "quiz-access.jsonl"),
+        )
+    )
     with app.state.database.sessions() as session:
         add_admin(session, "operator", "correct-password")
     return TestClient(app)
