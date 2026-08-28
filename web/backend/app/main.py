@@ -1,11 +1,16 @@
 """FastAPI application factory and process entry point."""
 
 import logging
+import json
+from pathlib import Path
 from time import perf_counter
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi import Request
+from fastapi.staticfiles import StaticFiles
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api import router
 from app.config import AppSettings, load_settings
@@ -27,14 +32,109 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app = FastAPI(title="砂糖字形课堂 API", version="1.0.5", docs_url="/api/docs")
     app.state.database = Database(settings.database_url)
     app.state.settings = settings
+    if settings.storage_backend == "local":
+        local_url = urlparse(settings.local_public_base_url)
+        Path(settings.local_storage_path).mkdir(parents=True, exist_ok=True)
+        app.mount(
+            local_url.path.rstrip("/") or "/uploads",
+            StaticFiles(directory=settings.local_storage_path),
+            name="local-uploads",
+        )
     app.add_exception_handler(ApiError, api_error_handler)
     from fastapi.exceptions import RequestValidationError
 
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(router)
+    app.add_middleware(RequestBodySizeLimitMiddleware, limit=settings.config_max_bytes)
     add_request_logging(app)
     add_health_route(app)
     return app
+
+
+class RequestBodySizeLimitMiddleware:
+    """Bound config-import bodies before FastAPI parses JSON or Pydantic models."""
+
+    def __init__(self, app: ASGIApp, limit: int) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if (
+            scope.get("type") != "http"
+            or scope.get("method") != "POST"
+            or path not in {
+                "/api/v1/admin/config/import",
+                "/api/v1/admin/config/import/validate",
+            }
+        ):
+            await self.app(scope, receive, send)
+            return
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        declared = headers.get(b"content-length")
+        if declared:
+            try:
+                if int(declared) > self.limit:
+                    await self._reject(send)
+                    return
+            except ValueError:
+                pass
+        total = 0
+        chunks: list[bytes] = []
+        while True:
+            message = await receive()
+            if message.get("type") != "http.request":
+                await self.app(scope, self._replay(chunks, message), send)
+                return
+            body = message.get("body", b"")
+            total += len(body)
+            if total > self.limit:
+                await self._reject(send)
+                return
+            chunks.append(body)
+            if not message.get("more_body", False):
+                break
+        await self.app(scope, self._replay(chunks), send)
+
+    async def _reject(self, send: Send) -> None:
+        body = json.dumps(
+            {"error": {"code": "CONFIG_BODY_TOO_LARGE", "message": "配置文件过大"}},
+            ensure_ascii=False,
+        ).encode("utf-8")
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+    def _replay(self, chunks: list[bytes], terminal: Message | None = None) -> Receive:
+        messages = [
+            {
+                "type": "http.request",
+                "body": chunk,
+                "more_body": index < len(chunks) - 1,
+            }
+            for index, chunk in enumerate(chunks)
+        ]
+        if not messages:
+            messages = [{"type": "http.request", "body": b"", "more_body": False}]
+        if terminal is not None:
+            messages.append(terminal)
+        iterator = iter(messages)
+
+        async def replay() -> Message:
+            try:
+                return next(iterator)
+            except StopIteration:
+                return {"type": "http.disconnect"}
+
+        return replay
 
 
 def add_request_logging(app: FastAPI) -> None:

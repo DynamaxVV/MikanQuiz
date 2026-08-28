@@ -247,6 +247,7 @@ onMounted(() => { void load(); });
                 </template>
               </div>
               <div class="card-fields">
+                <p class="editor-label">编辑内容</p>
                 <label>标题<input v-model="card.title" maxlength="100" placeholder="例如：细宋体笔画收尾" /></label>
                 <label>说明<textarea v-model="card.note" maxlength="500" rows="2" placeholder="笔记内容（可选）" /></label>
                 <label class="difficulty-label">难度
@@ -255,6 +256,15 @@ onMounted(() => { void load(); });
                   </div>
                 </label>
               </div>
+              <aside class="card-read-preview" aria-label="卡片预览">
+                <span class="preview-label">卡片预览</span>
+                <img v-if="card.imageUrl" :src="card.imageUrl" alt="" />
+                <div class="preview-copy">
+                  <strong>{{ card.title || '未命名卡片' }}</strong>
+                  <p>{{ card.note || '暂无说明' }}</p>
+                  <span aria-label="难度">{{ '★'.repeat(card.difficulty) }}{{ '☆'.repeat(3 - card.difficulty) }}</span>
+                </div>
+              </aside>
               <button type="button" class="remove-card" :aria-label="`删除 ${card.title || '卡片'}`" @click="removeCard(section, card)">×</button>
             </div>
           </div>
@@ -287,16 +297,23 @@ onMounted(() => { void load(); });
 .section-header input { width: 100%; border: 0; border-bottom: 1px solid #d8b789; padding: 5px 0; color: var(--color-text); background: transparent; font-size: 15px; font-weight: 750; box-sizing: border-box; }
 
 .card-list { display: grid; }
-.card-row { display: grid; grid-template-columns: 20px 100px minmax(0, 1fr) 26px; gap: 8px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--color-border); }
+.card-row { display: grid; grid-template-columns: 20px 100px minmax(0, 1fr) 190px 26px; gap: 8px; align-items: start; padding: 12px; border-bottom: 1px solid var(--color-border); }
 .card-row .drag-mark { display: grid; width: 20px; height: 26px; place-items: center; color: #9a652d; font-size: 17px; padding-top: 4px; cursor: grab; }
 .card-row .drag-mark:active { cursor: grabbing; }
 .card-preview { width: 100px; height: 72px; border: 2px dashed #dcc6ae; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; background: #fff8ed; }
 .card-preview img { width: 100%; height: 100%; object-fit: cover; }
 .no-image { font-size: 10px; color: var(--color-text-muted); text-align: center; padding: 4px; }
 .card-fields { display: grid; gap: 6px; }
+.editor-label, .preview-label { margin: 0; color: var(--color-text-muted); font-size: 11px; font-weight: 750; letter-spacing: .06em; }
 .card-fields label { display: grid; gap: 3px; color: var(--color-text-muted); font-size: 11px; font-weight: 700; }
 .card-fields input, .card-fields textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 6px; padding: 5px 8px; color: var(--color-text); background: var(--color-surface-warm); font-size: 12px; box-sizing: border-box; }
 .card-fields textarea { resize: vertical; min-height: 44px; }
+.card-read-preview { display: grid; gap: 7px; min-height: 132px; padding: 10px; border: 1px solid #efdbc1; border-radius: 9px; background: #fff8ed; box-sizing: border-box; }
+.card-read-preview img { width: 100%; height: 65px; object-fit: cover; border-radius: 5px; }
+.preview-copy { display: grid; gap: 3px; }
+.preview-copy strong { overflow: hidden; color: var(--color-text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-copy p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--color-text-muted); font-size: 11px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.preview-copy span { color: #ff9800; font-size: 13px; letter-spacing: 1px; }
 .difficulty-picker { display: flex; gap: 4px; }
 .difficulty-picker button { border: 0; padding: 0; background: transparent; color: #dfd2c4; font-size: 22px; line-height: 1; cursor: pointer; }
 .difficulty-picker button.active { color: #ff9800; }
@@ -316,6 +333,11 @@ onMounted(() => { void load(); });
   .page-header, .save-bar { align-items: flex-start; flex-direction: column; }
   .card-row { grid-template-columns: 20px minmax(0, 1fr) 26px; }
   .card-preview { grid-column: 2; width: 100%; height: 120px; }
+  .card-fields, .card-read-preview { grid-column: 2; }
+  .card-read-preview { min-height: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .card-read-preview .preview-label { grid-column: 1 / -1; }
+  .card-read-preview img { width: 70px; height: 50px; grid-column: 2; grid-row: 2; }
+  .card-read-preview .preview-copy { grid-column: 1; grid-row: 2; }
   .save-bar button { width: 100%; }
 }
 </style>

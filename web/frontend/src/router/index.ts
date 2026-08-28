@@ -17,6 +17,7 @@ const router = createRouter({
     { path: '/admin/strategy', component: () => import('@/pages/admin/AdminStrategyPage.vue'), meta: { title: '出题策略', admin: true } },
     { path: '/admin/font-presets', component: () => import('@/pages/admin/AdminFontPresetsPage.vue'), meta: { title: '字体快捷项', admin: true } },
     { path: '/admin/font-references', component: () => import('@/pages/admin/AdminFontReferencesPage.vue'), meta: { title: '嵌字笔记管理', admin: true } },
+    { path: '/admin/config', component: () => import('@/pages/admin/AdminConfigTransferPage.vue'), meta: { title: '配置迁移', admin: true } },
     { path: '/admin/submissions', component: () => import('@/pages/admin/AdminSubmissionsPage.vue'), meta: { title: '提交记录', admin: true } },
     { path: '/:pathMatch(.*)*', component: () => import('@/pages/NotFoundPage.vue'), meta: { title: '页面未找到' } },
   ],

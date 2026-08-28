@@ -241,6 +241,219 @@ class FontReferenceCatalogUpdate(ApiModel):
     sections: list[FontReferenceSectionWrite] = Field(min_length=0, max_length=50)
 
 
+class ConfigFontOption(ApiModel):
+    """Portable font option identified independently from its local database ID."""
+
+    config_key: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=500)
+    font_url: str | None = Field(default=None, max_length=2048)
+    minimum_difficulty: int = Field(ge=1, le=3)
+    sort_order: int = Field(ge=0, le=10000)
+
+    @field_validator("config_key", "name", mode="after")
+    @classmethod
+    def strip_required_values(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("配置项不能为空")
+        return value
+
+    @field_validator("font_url", mode="after")
+    @classmethod
+    def validate_font_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("字体地址必须是 HTTPS URL")
+        return value
+
+
+class ConfigOptionGroup(ApiModel):
+    """Portable option group with stable keys for all nested options."""
+
+    config_key: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=100)
+    sort_order: int = Field(ge=0, le=10000)
+    options: list[ConfigFontOption] = Field(default_factory=list, max_length=500)
+
+    @field_validator("config_key", "name", mode="after")
+    @classmethod
+    def strip_group_values(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("配置分区不能为空")
+        return value
+
+
+class ConfigOptionCatalog(ApiModel):
+    """The complete portable font option catalogue."""
+
+    groups: list[ConfigOptionGroup] = Field(min_length=1, max_length=50)
+
+
+class ConfigQuestion(ApiModel):
+    """Portable question with a stable answer-option reference."""
+
+    config_key: str = Field(min_length=1, max_length=64)
+    text: str = Field(min_length=1, max_length=500)
+    image_url: str | None = Field(default=None, max_length=2048)
+    difficulty: int = Field(ge=1, le=3)
+    correct_option_key: str | None = Field(default=None, max_length=64)
+    explanation: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("config_key", "text", "explanation", mode="after")
+    @classmethod
+    def strip_question_values(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("题目配置内容不能为空")
+        return value
+
+    @field_validator("image_url", mode="after")
+    @classmethod
+    def validate_optional_image_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("图片地址必须是 HTTPS URL")
+        return value
+
+    @field_validator("correct_option_key", mode="after")
+    @classmethod
+    def strip_option_key(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None and value.strip() else None
+
+
+class ConfigReferenceCard(ApiModel):
+    """Portable font-reference card, including cards without a section."""
+
+    config_key: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=100)
+    image_url: str = Field(min_length=1, max_length=2048)
+    note: str = Field(default="", max_length=500)
+    difficulty: int = Field(default=1, ge=1, le=3)
+    sort_order: int = Field(ge=0, le=10000)
+
+    @field_validator("config_key", "title", mode="after")
+    @classmethod
+    def strip_card_values(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("笔记配置内容不能为空")
+        return value
+
+    @field_validator("note", mode="after")
+    @classmethod
+    def strip_card_note(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("image_url", mode="after")
+    @classmethod
+    def validate_card_image_url(cls, value: str) -> str:
+        value = value.strip()
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("图片地址必须是 HTTPS URL")
+        return value
+
+
+class ConfigReferenceSection(ApiModel):
+    """Portable font-reference section."""
+
+    config_key: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=100)
+    sort_order: int = Field(ge=0, le=10000)
+    cards: list[ConfigReferenceCard] = Field(default_factory=list, max_length=5000)
+
+    @field_validator("config_key", "name", mode="after")
+    @classmethod
+    def strip_section_values(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("笔记分区不能为空")
+        return value
+
+
+class ConfigReferences(ApiModel):
+    """Portable notes, including explicitly unassigned cards."""
+
+    sections: list[ConfigReferenceSection] = Field(default_factory=list, max_length=50)
+    unassigned_cards: list[ConfigReferenceCard] = Field(default_factory=list, max_length=5000)
+
+
+class SettingsResponse(ApiModel):
+    """Question count, weighted modes and editable font shortcut strings."""
+
+    question_count: int = Field(ge=1, le=50)
+    modes: dict[Mode, list[int]]
+    font_presets: list[str]
+
+    @model_validator(mode="after")
+    def validate_modes(self) -> "SettingsResponse":
+        """Ensure all modes have three non-negative weights and a selectable star."""
+        expected = {"beginner", "proficient", "challenge"}
+        if set(self.modes) != expected:
+            raise ValueError("必须提供三种难度的权重")
+        for weights in self.modes.values():
+            if len(weights) != 3 or any(weight < 0 for weight in weights):
+                raise ValueError("每种难度需要三个非负权重")
+            if not any(weight > 0 for weight in weights):
+                raise ValueError("每种难度至少一个权重大于零")
+        if len(self.font_presets) > 100 or any(
+            not item.strip() or len(item.strip()) > 50 for item in self.font_presets
+        ):
+            raise ValueError("字体快捷项格式不正确")
+        self.font_presets = [item.strip() for item in self.font_presets]
+        return self
+
+
+class ConfigManifest(ApiModel):
+    """The single versioned JSON document used for full admin configuration transfer."""
+
+    format: Literal["mikanquiz-admin-config"]
+    version: Literal[1]
+    exported_at: str | None = None
+    option_catalog: ConfigOptionCatalog
+    questions: list[ConfigQuestion] = Field(max_length=10000)
+    settings: SettingsResponse
+    font_references: ConfigReferences
+
+
+class ConfigImportRequest(ApiModel):
+    """Preview or commit request for a complete configuration replacement."""
+
+    manifest: ConfigManifest
+    mode: Literal["replace"] = "replace"
+    expected_current_hash: str | None = Field(default=None, min_length=64, max_length=64)
+    expected_incoming_hash: str | None = Field(default=None, min_length=64, max_length=64)
+    confirm: bool = False
+
+
+class ConfigImportPreview(ApiModel):
+    """Read-only diff and hash result shown before destructive replacement."""
+
+    current_hash: str
+    incoming_hash: str
+    mode: Literal["replace"]
+    diff: dict[str, int]
+    warnings: list[str] = Field(default_factory=list)
+    can_import: bool
+
+
+class ConfigImportResult(ApiModel):
+    """Result returned after the replacement transaction and outbox enqueue."""
+
+    current_hash: str
+    imported_hash: str
+    mode: Literal["replace"]
+    diff: dict[str, int]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class PublicQuestion(ApiModel):
     """A question without answer or explanation, safe for anonymous clients."""
 
@@ -284,32 +497,6 @@ class QuestionStats(ApiModel):
     total: int
     by_difficulty: list[DifficultyStat]
     by_font: list[FontStat]
-
-
-class SettingsResponse(ApiModel):
-    """Question count, weighted modes and editable font shortcut strings."""
-
-    question_count: int = Field(ge=1, le=50)
-    modes: dict[Mode, list[int]]
-    font_presets: list[str]
-
-    @model_validator(mode="after")
-    def validate_modes(self) -> "SettingsResponse":
-        """Ensure all modes have three non-negative weights and a selectable star."""
-        expected = {"beginner", "proficient", "challenge"}
-        if set(self.modes) != expected:
-            raise ValueError("必须提供三种难度的权重")
-        for weights in self.modes.values():
-            if len(weights) != 3 or any(weight < 0 for weight in weights):
-                raise ValueError("每种难度需要三个非负权重")
-            if not any(weight > 0 for weight in weights):
-                raise ValueError("每种难度至少一个权重大于零")
-        if len(self.font_presets) > 100 or any(
-            not item.strip() or len(item.strip()) > 50 for item in self.font_presets
-        ):
-            raise ValueError("字体快捷项格式不正确")
-        self.font_presets = [item.strip() for item in self.font_presets]
-        return self
 
 
 class StrategyUpdate(ApiModel):

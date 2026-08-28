@@ -1,10 +1,12 @@
 """Question CRUD, option catalogue and singleton settings operations."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import func, select, asc, desc, text, case
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
-from app.models import FontOption, FontReference, FontReferenceSection, OptionGroup, Question, QuizSettings, to_pinyin
+from app.models import FontOption, FontReference, FontReferenceSection, OptionGroup, Question, QuizAttempt, QuizSettings, as_utc, to_pinyin
 from app.schemas import (
     FontOptionWrite,
     FontReferenceCatalogUpdate,
@@ -24,6 +26,12 @@ DEFAULT_MODES = {
     "challenge": [10, 40, 50],
 }
 
+PROTECTED_GROUP_KEYS = {
+    "system.option-group.black",
+    "system.option-group.song",
+    "system.option-group.round",
+}
+
 
 def get_settings(session: Session) -> QuizSettings:
     """Return the migration-seeded singleton settings row."""
@@ -35,7 +43,7 @@ def get_settings(session: Session) -> QuizSettings:
 
 def option_groups(session: Session) -> list[OptionGroup]:
     """Read the catalogue in the same stable order used by all clients."""
-    return session.scalars(select(OptionGroup).order_by(OptionGroup.sort_order, OptionGroup.id)).all()
+    return session.scalars(select(OptionGroup).order_by(OptionGroup.sort_order, OptionGroup.config_key)).all()
 
 
 def option_for_question(session: Session, option_id: int, difficulty: int) -> FontOption:
@@ -56,8 +64,7 @@ def create_question(session: Session, data: QuestionWrite) -> Question:
         correct_option_id=data.correct_option_id, explanation=data.explanation,
     )
     session.add(question)
-    session.commit()
-    session.refresh(question)
+    session.flush()
     return question
 
 
@@ -75,15 +82,49 @@ def update_question(session: Session, question: Question, patch: QuestionPatch) 
     values.update(patch.model_dump(exclude_unset=True))
     data = QuestionWrite.model_validate(values)
     _apply_question(session, question, data)
-    session.commit()
-    session.refresh(question)
+    session.flush()
     return question
 
 
 def delete_question(session: Session, question: Question) -> None:
     """Delete a current question while leaving submission snapshots intact."""
     session.delete(question)
-    session.commit()
+    session.flush()
+
+
+def ensure_question_not_in_active_attempt(session: Session, question_id: int) -> None:
+    """Protect an unfinished quiz from losing one of its bound questions."""
+    now = datetime.now(timezone.utc)
+    details = []
+    for attempt in session.scalars(
+        select(QuizAttempt).where(
+            QuizAttempt.submitted_at.is_(None), QuizAttempt.expires_at > now
+        )
+    ).all():
+        if question_id in (attempt.question_ids or []):
+            details.append(
+                {
+                    "attempt_id": attempt.id,
+                    "question_ids": [question_id],
+                    "expires_at": as_utc(attempt.expires_at).isoformat(),
+                }
+            )
+    if details:
+        raise ApiError(409, "ACTIVE_ATTEMPT_CONFLICT", "有未完成答题会话引用这道题目", details)
+
+
+def ensure_no_orphan_font_references(session: Session) -> None:
+    """Reject legacy section writes until imported unassigned cards are classified."""
+    orphan_count = session.scalar(
+        select(func.count()).select_from(FontReference).where(FontReference.section_id.is_(None))
+    )
+    if orphan_count:
+        raise ApiError(
+            409,
+            "FONT_REFERENCE_ORPHANED",
+            "存在未归入分区的嵌字笔记，请先通过完整配置导入进行处理",
+            [{"orphan_count": int(orphan_count)}],
+        )
 
 
 def _filtered_question_statement(statement, query: str | None, difficulties: list[int] | None, correct_option_id: int | None):
@@ -161,7 +202,12 @@ def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> li
     incoming_option_ids = {item.id for group in payload.groups for item in group.options if item.id is not None}
     protected_names = {"类黑", "类宋", "类圆", "类黑体", "类宋体", "类圆体"}
     missing_group_ids = set(existing_groups) - incoming_group_ids
-    protected_deleted = [existing_groups[gid].name for gid in missing_group_ids if existing_groups[gid].name in protected_names]
+    protected_deleted = [
+        existing_groups[gid].name
+        for gid in missing_group_ids
+        if existing_groups[gid].config_key in PROTECTED_GROUP_KEYS
+        or existing_groups[gid].name in protected_names
+    ]
     if protected_deleted:
         raise ApiError(403, "OPTION_GROUP_PROTECTED", f"分区「{protected_deleted[0]}」是系统保留分区，不能删除")
     nonempty_groups = [
@@ -190,7 +236,7 @@ def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> li
         session.delete(existing_options[option_id])
     for group_id in missing_group_ids:
         session.delete(existing_groups[group_id])
-    session.commit()
+    session.flush()
     return option_groups(session)
 
 
@@ -213,8 +259,7 @@ def update_strategy(session: Session, data: StrategyUpdate, settings: QuizSettin
     """Persist a fully validated weighted draw strategy."""
     validated = data.as_settings(settings.font_presets)
     settings.question_count, settings.modes = validated.question_count, validated.modes
-    session.commit()
-    session.refresh(settings)
+    session.flush()
     return settings
 
 
@@ -277,7 +322,7 @@ def replace_font_reference_catalog(session: Session, payload: FontReferenceCatal
         for card in section_cards:
             session.delete(card)
         session.delete(section)
-    session.commit()
+    session.flush()
     return font_reference_sections(session)
 
 

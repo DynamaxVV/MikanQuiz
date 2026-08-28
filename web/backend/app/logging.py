@@ -23,6 +23,9 @@ KEY_ACCESS_EVENTS = frozenset(
         "admin_login_failed",
         "admin_session_invalid",
         "admin_logout",
+        "config_exported",
+        "config_import_validated",
+        "config_imported",
     }
 )
 

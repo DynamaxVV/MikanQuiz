@@ -10,7 +10,7 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Cookie, Depends, File, Header, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import AppSettings
@@ -26,12 +26,14 @@ from app.schemas import (
     AttemptCreated,
     AttemptCurrent,
     AttemptSubmit,
+    ConfigImportPreview,
+    ConfigImportRequest,
+    ConfigImportResult,
     FontReferenceCatalogUpdate,
     FontReferenceResponse,
     FontReferenceSectionResponse,
     OptionCatalogUpdate,
     FontReferenceWrite,
-    OptionCatalogUpdate,
     OptionGroupResponse,
     HealthResponse,
     ImageUploadResponse,
@@ -50,6 +52,7 @@ from app.schemas import (
     SubmissionResult,
 )
 from app.services import admin as admin_service
+from app.services import config_transfer
 from app.services import images as image_service
 from app.services import questions as question_service
 from app.services import quiz as quiz_service
@@ -333,6 +336,118 @@ def admin_session_status(auth: AdminAuth = Depends(require_admin)) -> AdminStatu
     )
 
 
+@router.get("/admin/config/export")
+def export_admin_config(
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Export the complete editable configuration as one portable JSON document."""
+    manifest = config_transfer.export_manifest(session)
+    content = json.dumps(
+        manifest.model_dump(mode="json"), ensure_ascii=False, indent=2
+    ).encode("utf-8")
+    log_event(
+        "config_exported",
+        admin_username=auth.admin.username,
+        question_count=len(manifest.questions),
+        group_count=len(manifest.option_catalog.groups),
+    )
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=mikanquiz-admin-config.json"},
+    )
+
+
+@router.post("/admin/config/import/validate", response_model=ConfigImportPreview)
+def validate_admin_config(
+    data: ConfigImportRequest,
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
+) -> ConfigImportPreview:
+    """Validate a candidate manifest and calculate its replacement preview read-only."""
+    result = config_transfer.preview(session, settings, data.manifest)
+    log_event(
+        "config_import_validated",
+        admin_username=auth.admin.username,
+        incoming_hash=result.incoming_hash,
+    )
+    return result
+
+
+@router.post("/admin/config/import", response_model=ConfigImportResult)
+def import_admin_config(
+    data: ConfigImportRequest,
+    request: Request,
+    auth: AdminAuth = Depends(require_admin),
+    settings: AppSettings = Depends(get_app_settings),
+) -> ConfigImportResult:
+    """Replace all config entities only after an explicit, hash-bound confirmation."""
+    if not data.confirm:
+        raise ApiError(400, "CONFIG_CONFIRMATION_REQUIRED", "请先完成预览并确认替换")
+    if not data.expected_current_hash or not data.expected_incoming_hash:
+        raise ApiError(400, "CONFIG_PREVIEW_REQUIRED", "请使用最新预览结果确认导入")
+    incoming_hash = config_transfer.manifest_hash(data.manifest)
+    if incoming_hash != data.expected_incoming_hash:
+        raise ApiError(
+            409,
+            "CONFIG_PREVIEW_STALE",
+            "导入文件已变化，请重新预览",
+            [{"field": "incoming_hash", "expected": data.expected_incoming_hash, "actual": incoming_hash}],
+        )
+
+    connection = request.app.state.database.engine.connect()
+    locked: Session | None = None
+    try:
+        try:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+        except OperationalError as error:
+            raise ApiError(503, "CONFIG_WRITE_BUSY", "配置正在被其他操作写入，请稍后重试") from error
+        locked = Session(bind=connection, expire_on_commit=False)
+        current = config_transfer.export_manifest(locked)
+        current_hash = config_transfer.manifest_hash(current)
+        if current_hash != data.expected_current_hash:
+            raise ApiError(
+                409,
+                "CONFIG_PREVIEW_STALE",
+                "当前配置已变化，请重新预览",
+                [{"field": "current_hash", "expected": data.expected_current_hash, "actual": current_hash}],
+            )
+        result = config_transfer.replace_database(locked, settings, data.manifest, current)
+        locked.commit()
+        connection.commit()
+    except ApiError:
+        if locked is not None:
+            locked.rollback()
+        else:
+            connection.rollback()
+        raise
+    except OperationalError as error:
+        if locked is not None:
+            locked.rollback()
+        else:
+            connection.rollback()
+        raise ApiError(503, "CONFIG_WRITE_BUSY", "配置写入失败，请稍后重试") from error
+    except Exception:
+        if locked is not None:
+            locked.rollback()
+        else:
+            connection.rollback()
+        raise
+    finally:
+        if locked is not None:
+            locked.close()
+        connection.close()
+    log_event(
+        "config_imported",
+        admin_username=auth.admin.username,
+        incoming_hash=result.imported_hash,
+        mode=result.mode,
+    )
+    return result
+
+
 @router.get("/admin/questions", response_model=QuestionPage)
 def list_admin_questions(
     page: int = Query(default=1, ge=1),
@@ -362,14 +477,14 @@ def create_admin_question(
     data: QuestionWrite,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionResponse:
     """Create one validated question from the PC editor form."""
     question = question_service.create_question(session, data)
+    sync_service.enqueue_scope(session, "questions")
+    session.commit()
     log_event(
         "question_created", admin_username=auth.admin.username, question_id=question.id
     )
-    sync_service.sync_question(session, settings, question.id)
     return admin_question(session, question)
 
 
@@ -490,14 +605,12 @@ def put_font_reference_catalog(
     data: FontReferenceCatalogUpdate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> list[FontReferenceSectionResponse]:
     """Save the complete font reference catalogue."""
-    old_urls = {row[0] for row in session.execute(select(FontReference.image_url).where(FontReference.image_url.isnot(None), FontReference.image_url != "")).all()}
+    question_service.ensure_no_orphan_font_references(session)
     sections = question_service.replace_font_reference_catalog(session, data)
-    new_urls = {row[0] for row in session.execute(select(FontReference.image_url).where(FontReference.image_url.isnot(None), FontReference.image_url != "")).all()}
-    for url in old_urls - new_urls:
-        image_service.delete_r2_object(settings, url)
+    sync_service.enqueue_scope(session, "notes")
+    session.commit()
     result: list[FontReferenceSectionResponse] = []
     for section in sections:
         cards = question_service._font_reference_cards(session, section.id)
@@ -513,7 +626,6 @@ def put_font_reference_catalog(
         section_count=len(data.sections),
         card_count=sum(len(section.cards) for section in data.sections),
     )
-    sync_service.sync_notes(session, settings)
     return result
 
 
@@ -523,15 +635,15 @@ def patch_admin_question(
     data: QuestionPatch,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionResponse:
     """Apply a validated partial edit while preserving fixed option invariants."""
     question = question_service.get_question(session, question_id)
     updated = question_service.update_question(session, question, data)
+    sync_service.enqueue_scope(session, "questions")
+    session.commit()
     log_event(
         "question_updated", admin_username=auth.admin.username, question_id=updated.id
     )
-    sync_service.sync_question(session, settings, updated.id)
     return admin_question(session, updated)
 
 
@@ -540,16 +652,16 @@ def delete_admin_question(
     question_id: int,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> Response:
     """Remove a current question without erasing immutable historical snapshots."""
     question = question_service.get_question(session, question_id)
+    question_service.ensure_question_not_in_active_attempt(session, question_id)
     question_service.delete_question(session, question)
+    sync_service.enqueue_scope(session, "questions", removed_local_ids={question_id})
+    session.commit()
     log_event(
         "question_deleted", admin_username=auth.admin.username, question_id=question_id
     )
-    sync_service.delete_question_sync(settings, question_id)
-    sync_service.sync_question_snapshot(session, settings)
     return Response(status_code=204)
 
 
@@ -597,7 +709,6 @@ def import_admin_questions(
     data: QuestionImportPayload,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> QuestionImportResult:
     """Bulk-import questions from a JSON file exported by the same endpoint."""
     created = 0
@@ -624,6 +735,7 @@ def import_admin_questions(
         session.add(question)
         created += 1
 
+    sync_service.enqueue_scope(session, "questions")
     session.commit()
     log_event(
         "questions_imported",
@@ -631,7 +743,6 @@ def import_admin_questions(
         created=created,
         failed=failed,
     )
-    sync_service.sync_question_snapshot(session, settings)
     return QuestionImportResult(
         total=len(data.questions),
         created=created,
@@ -666,26 +777,16 @@ def get_question_statistics(
     return QuestionStats(**data)
 
 
-def _collect_font_urls(session: Session) -> set[str]:
-    """Collect every non-null font_url currently in the database."""
-    rows = session.execute(select(FontOption.font_url).where(FontOption.font_url.isnot(None))).all()
-    return {row[0] for row in rows if row[0]}
-
-
 @router.put("/admin/option-groups", response_model=list[OptionGroupResponse])
 def put_option_catalog(
     data: OptionCatalogUpdate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
-    settings: AppSettings = Depends(get_app_settings),
 ) -> list[OptionGroupResponse]:
     """Save groups and options independently from draw strategy settings."""
-    old_urls = _collect_font_urls(session)
     question_service.replace_option_catalog(session, data)
-    new_urls = _collect_font_urls(session)
-    orphaned = old_urls - new_urls
-    for url in orphaned:
-        image_service.delete_r2_object(settings, url)
+    sync_service.enqueue_scope(session, "questions")
+    session.commit()
     log_event(
         "option_catalog_replaced",
         admin_username=auth.admin.username,
@@ -739,6 +840,8 @@ def import_option_catalog(
 ) -> list[OptionGroupResponse]:
     """Import a font catalogue from an exported JSON file."""
     question_service.replace_option_catalog(session, data)
+    sync_service.enqueue_scope(session, "questions")
+    session.commit()
     log_event(
         "option_catalog_imported",
         admin_username=auth.admin.username,
@@ -758,6 +861,7 @@ def put_admin_strategy(
     settings = question_service.update_strategy(
         session, data, question_service.get_settings(session)
     )
+    session.commit()
     log_event(
         "strategy_updated",
         admin_username=auth.admin.username,

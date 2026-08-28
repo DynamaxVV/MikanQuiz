@@ -6,7 +6,8 @@ import sqlite3
 import pytest
 
 from app.admin_cli import run_command
-from app.config import load_settings
+from app.config import AppSettings, load_settings
+from app.services.images import upload_image
 
 
 def test_empty_database_migration_has_integrity_and_seed(database_url: str) -> None:
@@ -15,7 +16,7 @@ def test_empty_database_migration_has_integrity_and_seed(database_url: str) -> N
     connection = sqlite3.connect(path)
     try:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "20260725_0010"
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "20260828_0011"
         assert connection.execute("SELECT question_count FROM quiz_settings WHERE id = 1").fetchone()[0] == 10
     finally:
         connection.close()
@@ -57,3 +58,25 @@ def test_settings_load_dotenv_without_overriding_process_values(
     settings = load_settings(config)
     assert settings.r2_bucket == "file-bucket"
     assert settings.r2_public_base_url == "https://override.example.test"
+
+
+def test_settings_support_local_upload_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow a committed example to opt into local storage for debugging."""
+    config = tmp_path / ".env"
+    config.write_text("QUIZ_STORAGE_BACKEND=local\nQUIZ_LOCAL_STORAGE_PATH=./var/uploads\n", encoding="utf-8")
+    monkeypatch.delenv("QUIZ_STORAGE_BACKEND", raising=False)
+    settings = load_settings(config)
+    assert settings.storage_backend == "local"
+    assert settings.local_storage_path == "./var/uploads"
+
+
+def test_local_storage_writes_a_browser_visible_upload(tmp_path) -> None:
+    """Keep local debugging uploads independent from R2 credentials."""
+    settings = AppSettings(
+        storage_backend="local",
+        local_storage_path=str(tmp_path / "uploads"),
+        local_public_base_url="http://127.0.0.1:8000/uploads",
+    )
+    url = upload_image(settings, b"\x89PNG\r\n\x1a\ncontent", "image/png", "notes")
+    assert url.startswith("http://127.0.0.1:8000/uploads/notes/")
+    assert list((tmp_path / "uploads" / "notes").glob("*.png"))

@@ -16,15 +16,17 @@ import type {
   SubmissionResult,
   SubmissionSummary,
   WrongAnswer,
+  ConfigImportPreview,
+  ConfigImportResult,
 } from '@/types';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '/api/v1').replace(/\/+$/, '');
 
 interface ApiErrorBody {
   code?: string;
   detail?: string | { msg?: string }[];
   message?: string;
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; details?: Array<Record<string, unknown>>; errors_truncated?: boolean };
 }
 
 interface RawQuestion {
@@ -130,12 +132,14 @@ interface RawQuestionNavigation { previous_id: number | null; next_id: number | 
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly details?: Array<Record<string, unknown>>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Array<Record<string, unknown>>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -182,7 +186,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     try { data = JSON.parse(text) as T & ApiErrorBody; }
     catch { throw new ApiError('服务返回了无法识别的响应。', response.status, 'INVALID_RESPONSE'); }
   }
-  if (!response.ok) throw new ApiError(messageFromError(data, '请求未能完成，请稍后重试。'), response.status, codeFromError(data));
+  if (!response.ok) throw new ApiError(messageFromError(data, '请求未能完成，请稍后重试。'), response.status, codeFromError(data), data?.error?.details);
   return data as T;
 }
 
@@ -276,6 +280,37 @@ async function uploadImageFile(file: File, prefix?: string): Promise<string> {
   return response.image_url;
 }
 
+async function readConfigFile(file: File): Promise<Record<string, unknown>> {
+  try {
+    const value: unknown = JSON.parse(await file.text());
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('not an object');
+    return value as Record<string, unknown>;
+  } catch {
+    throw new ApiError('配置文件不是有效的 JSON。', 422, 'CONFIG_JSON_INVALID');
+  }
+}
+
+async function readQuestionFile(file: File): Promise<Record<string, unknown>> {
+  try {
+    const value: unknown = JSON.parse(await file.text());
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('not an object');
+    return value as Record<string, unknown>;
+  } catch {
+    throw new ApiError('题库文件不是有效的 JSON。', 422, 'QUESTION_JSON_INVALID');
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   getQuizSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/quiz/settings')),
 
@@ -307,6 +342,35 @@ export const api = {
   logout: (): Promise<void> => request<void>('/admin/logout', { method: 'POST' }),
 
   getAdminSession: async (): Promise<AdminSession> => sessionFrom(await request<RawSession>('/admin/session')),
+
+  exportConfig: async (): Promise<void> => {
+    const response = await fetch(`${API_BASE}/admin/config/export`, { credentials: 'same-origin' });
+    if (!response.ok) {
+      let body: ApiErrorBody | null = null;
+      try { body = JSON.parse(await response.text()) as ApiErrorBody; } catch { /* use fallback */ }
+      const message = response.status === 404
+        ? '当前服务器未提供配置导出接口，请更新并重启后端服务。'
+        : messageFromError(body, '配置导出失败。');
+      throw new ApiError(message, response.status, response.status === 404 ? 'CONFIG_EXPORT_NOT_FOUND' : codeFromError(body), body?.error?.details);
+    }
+    downloadBlob(await response.blob(), 'mikanquiz-admin-config.json');
+  },
+
+  validateConfig: async (file: File): Promise<ConfigImportPreview> => {
+    const manifest = await readConfigFile(file);
+    const raw = await request<{ current_hash: string; incoming_hash: string; mode: 'replace'; diff: ConfigImportPreview['diff']; warnings: string[]; can_import: boolean }>('/admin/config/import/validate', {
+      method: 'POST', body: JSON.stringify({ manifest, mode: 'replace' }),
+    });
+    return { currentHash: raw.current_hash, incomingHash: raw.incoming_hash, mode: raw.mode, diff: raw.diff, warnings: raw.warnings, canImport: raw.can_import };
+  },
+
+  importConfig: async (file: File, preview: ConfigImportPreview): Promise<ConfigImportResult> => {
+    const manifest = await readConfigFile(file);
+    const raw = await request<{ current_hash: string; imported_hash: string; mode: 'replace'; diff: ConfigImportResult['diff']; warnings: string[] }>('/admin/config/import', {
+      method: 'POST', body: JSON.stringify({ manifest, mode: 'replace', expected_current_hash: preview.currentHash, expected_incoming_hash: preview.incomingHash, confirm: true }),
+    });
+    return { currentHash: raw.current_hash, importedHash: raw.imported_hash, mode: raw.mode, diff: raw.diff, warnings: raw.warnings };
+  },
 
   getStatistics: async (): Promise<QuestionStats> => {
     const raw = await request<{ total: number; by_difficulty: { difficulty: number; count: number }[]; by_font: { option_id: number; option_name: string; count: number }[] }>('/admin/statistics');
@@ -382,10 +446,12 @@ export const api = {
   exportQuestions: async (): Promise<void> => {
     const response = await fetch(`${API_BASE}/admin/questions/export`, { credentials: 'same-origin' });
     if (!response.ok) {
-      const text = await response.text();
-      let msg = '导出失败';
-      try { const body = JSON.parse(text); msg = body?.error?.message ?? msg; } catch { /* ignore */ }
-      throw new ApiError(msg, response.status);
+      let body: ApiErrorBody | null = null;
+      try { body = JSON.parse(await response.text()) as ApiErrorBody; } catch { /* use fallback */ }
+      const message = response.status === 404
+        ? '当前服务器未提供题库导出接口，请更新并重启后端服务。'
+        : messageFromError(body, '题库导出失败。');
+      throw new ApiError(message, response.status, response.status === 404 ? 'QUESTION_EXPORT_NOT_FOUND' : codeFromError(body), body?.error?.details);
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -401,9 +467,9 @@ export const api = {
   },
 
   importQuestions: async (file: File): Promise<{ total: number; created: number; failed: number; errors: string[] }> => {
-    const text = await file.text();
-    const body = JSON.parse(text);
-    return request('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
+    const body = await readQuestionFile(file);
+    if (!Array.isArray(body.questions)) throw new ApiError('题库文件缺少 questions 数组。', 422, 'QUESTION_JSON_INVALID');
+    return request<{ total: number; created: number; failed: number; errors: string[] }>('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
   },
 
   getFontReferenceSections: async (): Promise<FontReferenceSection[]> =>

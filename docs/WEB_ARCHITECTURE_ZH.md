@@ -16,7 +16,7 @@
 - Web 新增管理员维护的"嵌字笔记"；小程序暂不增加。
 - 管理员有多个独立账号、权限相同；小程序和 Web 使用同一组账号密码。
 - 管理员账号只通过服务器命令新增、改密、停用和恢复，不提供后台账号管理页面。
-- 题目在 PC Web 上逐题录入，不做 Excel/ZIP 批量导入。
+- 题目在 PC Web 上逐题录入；管理端同时支持题库 JSON 批量导入/导出，不做 Excel/ZIP 导入。
 - 管理端选择题图后由 FastAPI 使用服务器侧 Cloudflare R2 凭据上传；数据库只保存返回的公开 HTTPS 图片直链。
 - 本阶段不迁移旧云数据；新 SQLite 从空库开始，旧云数据继续保留且不删除。
 - 预计同时在线约 10 人、每日提交几十次、题库几百题。
@@ -121,11 +121,14 @@ web/
   scripts/
     migrate_cloud_export.py
     backup_sqlite.py
+    sync_worker.py
   deploy/
     nginx.conf.example
     quiz-api.service
     quiz-backup.service
     quiz-backup.timer
+    quiz-sync.service
+    quiz-sync.timer
 ```
 
 约束：
@@ -200,6 +203,32 @@ python -m app.admin_cli enable USERNAME
 
 提交记录永久保留，管理 API 必须分页，不允许无上限返回全部记录。
 
+### 7.6 完整配置传输
+
+管理配置采用一个 versioned manifest，而不是依赖本机整数 ID：
+
+```json
+{
+  "format": "mikanquiz-admin-config",
+  "version": 1,
+  "exported_at": "...",
+  "option_catalog": {"groups": [...]},
+  "questions": [...],
+  "settings": {...},
+  "font_references": {"sections": [...], "unassigned_cards": [...]}
+}
+```
+
+分区、字体、题目、笔记分区和笔记卡片均带持久化 `config_key`；题目通过 `correct_option_key` 引用字体。`exported_at` 仅用于传输展示，canonical projection 会移除它，再以 `ensure_ascii=false`、`sort_keys=true`、紧凑分隔符和 UTF-8 SHA-256 生成预览哈希。数据库整数 ID、时间戳和管理员凭据不进入该文件。
+
+导入采用“预览 → hash-bound 确认 → replace”流程，只替换题库、字体目录、策略和嵌字笔记，不替换管理员、会话、attempt、提交历史，也不删除 R2 原始图片/字体。服务端在 `BEGIN IMMEDIATE` 中重新校验文件、重算当前哈希并检查活动 attempt；删除题目仍被未提交且未过期 attempt 引用时，整个导入返回 `ACTIVE_ATTEMPT_CONFLICT`。字体 URL 仅允许当前 R2 公共地址或 `QUIZ_FONT_SOURCE_ORIGINS` 中的 HTTPS origin，manifest 自身不能声明新信任来源。
+
+导入提交后只在 `sync_outbox` 写入 `questions`/`notes` scope 任务。worker 短事务 claim、租约与 scope fence、网络发布、CAS 完成；每个 scope 单飞，失败按 1/5/30/300 秒退避，最多 10 次。任务会重建现有实体文件和全量快照，并携带删除 tombstone；租约丢失后，即使旧 worker 已写入对象，也会无条件重新排队当前 hash，避免晚到写覆盖新版本。
+
+#### 单独题库 JSON 传输
+
+配置迁移页还提供题库专项导入/导出，不参与完整配置的 `replace` 事务。`GET /api/v1/admin/questions/export` 返回 `version: 1` 的 `questions` 文件，包含题目内容、图片地址、难度、正确字体 ID、解析和审计时间；`POST /api/v1/admin/questions/import` 忽略题目 ID/时间字段，把有效题目追加到当前题库。已有题目不会覆盖或去重，重复导入同一文件会产生重复题目；字体 ID 不存在的条目单独失败，其余有效条目继续导入，并通过 `total`、`created`、`failed`、`errors` 返回结果。
+
 ## 8. API 边界
 
 统一使用 `/api/v1`，响应使用稳定错误码和中文可显示消息。建议最小接口：
@@ -247,6 +276,11 @@ PUT    /api/v1/admin/settings/strategy
 PUT    /api/v1/admin/settings/font-presets
 GET    /api/v1/admin/submissions?page=&display_name=&from=&to=
 GET    /api/v1/admin/submissions/{id}
+GET    /api/v1/admin/config/export
+POST   /api/v1/admin/config/import/validate
+POST   /api/v1/admin/config/import
+GET    /api/v1/admin/questions/export
+POST   /api/v1/admin/questions/import
 ```
 
 嵌字笔记卡片由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增、`PATCH /api/v1/admin/font-references/{id}` 更新，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
@@ -350,6 +384,9 @@ npm --prefix web/frontend run build
 - Web：首页 → 选难度 → 答完 → 提交 → 查看错题 → 再答一次。
 - Web：刷新后恢复 24 小时内未完成 attempt；已提交 attempt 不重复写记录。
 - Web：管理员登录、题目 CRUD、策略、字体快捷项、分页提交记录。
+- Web：管理员导出完整 JSON，选择文件后预览 hash/差异，并在明确确认后替换配置。
+- Web：管理员在同一配置迁移页导出题库 JSON，选择题库文件追加导入，并查看成功/失败统计。
+- Sync：运行 outbox worker，验证 R2 发布失败可重试且不会阻塞 API 写入。
 - Web：嵌字笔记、图片放大、图片失败状态。
 - 小程序：同一后端上的公开答题和账号密码管理登录。
 - Network：备案域名、TLS 证书链、真实 IP 转发、限流响应和图床可达性。

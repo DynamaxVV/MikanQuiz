@@ -4,6 +4,7 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
+from typing import Any
 
 from app.logging import log_event
 
@@ -11,11 +12,19 @@ from app.logging import log_event
 class ApiError(Exception):
     """An expected API failure with a stable public error code."""
 
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Save the HTTP status and Chinese user-displayable message."""
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.details = (details or [])[:200] or None
+        self.errors_truncated = bool(details and len(details) > 200)
 
 
 async def api_error_handler(request: Request, error: ApiError) -> JSONResponse:
@@ -27,9 +36,14 @@ async def api_error_handler(request: Request, error: ApiError) -> JSONResponse:
         error_code=error.code,
         path=request.url.path,
     )
+    payload: dict[str, Any] = {"code": error.code, "message": error.message}
+    if error.details is not None:
+        payload["details"] = error.details
+    if error.errors_truncated:
+        payload["errors_truncated"] = True
     return JSONResponse(
         status_code=error.status_code,
-        content={"error": {"code": error.code, "message": error.message}},
+        content={"error": payload},
     )
 
 

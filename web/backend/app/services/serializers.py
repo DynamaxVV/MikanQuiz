@@ -9,8 +9,8 @@ from app.schemas import FontOptionResponse, OptionGroupResponse, PublicQuestion,
 
 def catalogue(session: Session, difficulty: int | None = None) -> list[OptionGroupResponse]:
     """Build grouped options, optionally hiding fonts locked above a star level."""
-    groups = session.scalars(select(OptionGroup).order_by(OptionGroup.sort_order, OptionGroup.id)).all()
-    options = session.scalars(select(FontOption).order_by(FontOption.sort_order, FontOption.id)).all()
+    groups = session.scalars(select(OptionGroup).order_by(OptionGroup.sort_order, OptionGroup.config_key)).all()
+    options = session.scalars(select(FontOption).order_by(FontOption.sort_order, FontOption.config_key)).all()
     by_group: dict[int, list[FontOptionResponse]] = {group.id: [] for group in groups}
     for option in options:
         if difficulty is None or option.minimum_difficulty <= difficulty:

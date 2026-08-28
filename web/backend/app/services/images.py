@@ -32,14 +32,15 @@ DELETER = Path(__file__).resolve().parents[3] / "r2-uploader" / "delete.mjs"
 
 
 def upload_image(settings: AppSettings, content: bytes, content_type: str, prefix: str | None = None) -> str:
-    """Validate one image, then delegate the authenticated R2 PUT to Node."""
+    """Validate and store one image in the configured upload backend."""
     suffix = validate_image(content, content_type)
+    if settings.storage_backend == "local":
+        return write_local(settings, content, prefix, suffix)
     ensure_configured(settings)
-    key = f"{prefix.rstrip('/')}/{_random_key()}{suffix}" if prefix else None
     with NamedTemporaryFile(suffix=suffix) as image:
         image.write(content)
         image.flush()
-        return run_uploader(settings, image.name, content_type, key=key)
+        return run_uploader(settings, image.name, content_type)
 
 
 def _random_key() -> str:
@@ -67,8 +68,29 @@ def ensure_configured(settings: AppSettings) -> None:
         raise ApiError(503, "IMAGE_UPLOAD_UNCONFIGURED", "R2 地址配置无效")
 
 
+def write_local(
+    settings: AppSettings,
+    content: bytes,
+    prefix: str | None,
+    suffix: str,
+    filename: str | None = None,
+) -> str:
+    """Write a development upload below the configured directory and return its URL."""
+    base = Path(settings.local_storage_path).resolve()
+    directory = base / prefix.strip("/") if prefix else base
+    directory.mkdir(parents=True, exist_ok=True)
+    filename = filename or f"{_random_key()}{suffix}"
+    (directory / filename).write_bytes(content)
+    relative = f"{prefix.strip('/')}/{filename}" if prefix else filename
+    return f"{settings.local_public_base_url.rstrip('/')}/{relative}"
+
+
 def upload_json(settings: AppSettings, key: str, data: dict | list) -> str:
     """Upload a JSON document to R2 with no-cache policy."""
+    if settings.storage_backend == "local":
+        parent, _, filename = key.rpartition("/")
+        content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        return write_local(settings, content, parent or None, ".json", filename)
     ensure_configured(settings)
     content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
     with NamedTemporaryFile(suffix=".json", mode="wb") as f:
@@ -99,6 +121,8 @@ def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: 
 def upload_font(settings: AppSettings, content: bytes, content_type: str, filename: str = "font") -> str:
     """Validate one font file, deduplicate by content hash, upload only if absent."""
     suffix = validate_font(content, content_type)
+    if settings.storage_backend == "local":
+        return write_local(settings, content, "quiz-fonts", suffix)
     ensure_configured(settings)
     content_hash = hashlib.sha256(content).hexdigest()
     safe_filename = _safe_filename(filename)
@@ -139,8 +163,14 @@ def _font_already_uploaded(url: str) -> bool:
 
 def delete_r2_object(settings: AppSettings, font_url: str) -> None:
     """Extract the R2 key from a public URL and delete the object."""
+    if settings.storage_backend == "local":
+        delete_local(settings, font_url)
+        return
     key = _url_to_key(settings, font_url)
-    ensure_configured(settings)
+    try:
+        ensure_configured(settings)
+    except ApiError:
+        return
     payload = {"endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "key": key}
     try:
         run(["node", str(DELETER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=15)
@@ -151,6 +181,40 @@ def delete_r2_object(settings: AppSettings, font_url: str) -> None:
             error_type=type(error).__name__,
             key=key,
         )
+
+
+def delete_r2_object_strict(settings: AppSettings, font_url: str) -> None:
+    """Delete one object and propagate errors so the durable worker can retry."""
+    if settings.storage_backend == "local":
+        delete_local(settings, font_url)
+        return
+    key = _url_to_key(settings, font_url)
+    ensure_configured(settings)
+    payload = {
+        "endpoint": settings.r2_endpoint,
+        "accessKeyId": settings.r2_access_key_id,
+        "secretAccessKey": settings.r2_secret_access_key,
+        "bucket": settings.r2_bucket,
+        "key": key,
+    }
+    run(
+        ["node", str(DELETER)],
+        input=json.dumps(payload),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+
+def delete_local(settings: AppSettings, url: str) -> None:
+    """Delete a local upload only when its resolved path stays in storage."""
+    base_url = settings.local_public_base_url.rstrip("/") + "/"
+    if not url.startswith(base_url):
+        return
+    candidate = (Path(settings.local_storage_path).resolve() / url.removeprefix(base_url)).resolve()
+    if candidate.is_relative_to(Path(settings.local_storage_path).resolve()):
+        candidate.unlink(missing_ok=True)
 
 
 def _url_to_key(settings: AppSettings, url: str) -> str:

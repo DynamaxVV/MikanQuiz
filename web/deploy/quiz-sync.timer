@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish MikanQuiz JSON sync outbox every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+RandomizedDelaySec=10s
+
+[Install]
+WantedBy=timers.target

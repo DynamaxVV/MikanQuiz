@@ -1,6 +1,7 @@
 """Persistent SQLAlchemy models for the quiz system."""
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Text, UniqueConstraint
@@ -20,6 +21,11 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def new_config_key() -> str:
+    """Return an opaque stable identifier used by portable configuration files."""
+    return str(uuid4())
+
+
 def as_utc(value: datetime) -> datetime:
     """Normalize SQLite's naive timestamp reads to the API's UTC contract."""
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
@@ -35,6 +41,7 @@ class OptionGroup(Base):
     __tablename__ = "option_groups"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=new_config_key)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -45,6 +52,7 @@ class FontOption(Base):
     __tablename__ = "font_options"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=new_config_key)
     group_id: Mapped[int] = mapped_column(ForeignKey("option_groups.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     pinyin: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -64,6 +72,7 @@ class Question(Base):
     __table_args__ = (CheckConstraint("difficulty BETWEEN 1 AND 3", name="ck_question_difficulty"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=new_config_key)
     legacy_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     text: Mapped[str] = mapped_column(String(500), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
@@ -99,6 +108,7 @@ class FontReference(Base):
     __tablename__ = "font_references"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=new_config_key)
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     note: Mapped[str] = mapped_column(String(500), nullable=False, default="")
@@ -114,6 +124,7 @@ class FontReferenceSection(Base):
     __tablename__ = "font_reference_sections"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=new_config_key)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -201,3 +212,36 @@ class SubmissionAnswer(Base):
     correct_option_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class SyncOutbox(Base):
+    """Durable, retryable publication work for derived R2 JSON documents."""
+
+    __tablename__ = "sync_outbox"
+    __table_args__ = (UniqueConstraint("scope", "state_hash", name="uq_sync_outbox_scope_hash"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lock_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scope_fence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class SyncScopeState(Base):
+    """Current and last-published hashes for one derived-data scope."""
+
+    __tablename__ = "sync_scope_state"
+
+    scope: Mapped[str] = mapped_column(String(32), primary_key=True)
+    current_state_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    published_state_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

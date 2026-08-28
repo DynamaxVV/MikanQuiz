@@ -118,3 +118,39 @@ export interface FontReference {
   sortOrder: number;
   createdAt: string;
 }
+
+export interface ConfigDiff {
+  option_groups_added: number;
+  option_groups_deleted: number;
+  option_groups_updated: number;
+  font_options_added: number;
+  font_options_deleted: number;
+  font_options_updated: number;
+  questions_added: number;
+  questions_deleted: number;
+  questions_updated: number;
+  reference_sections_added: number;
+  reference_sections_deleted: number;
+  reference_sections_updated: number;
+  reference_cards_added: number;
+  reference_cards_deleted: number;
+  reference_cards_updated: number;
+  settings_changed: number;
+}
+
+export interface ConfigImportPreview {
+  currentHash: string;
+  incomingHash: string;
+  mode: 'replace';
+  diff: ConfigDiff;
+  warnings: string[];
+  canImport: boolean;
+}
+
+export interface ConfigImportResult {
+  currentHash: string;
+  importedHash: string;
+  mode: 'replace';
+  diff: ConfigDiff;
+  warnings: string[];
+}
