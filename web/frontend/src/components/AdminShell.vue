@@ -6,6 +6,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { api } from '@/api/client';
 import type { AdminSession } from '@/types';
 
+defineProps<{ focusMode?: boolean }>();
+
 const route = useRoute();
 const router = useRouter();
 const session = ref<AdminSession | null>(null);
@@ -37,7 +39,7 @@ onMounted(() => { void checkSession(); });
 </script>
 
 <template>
-  <main class="admin-frame">
+  <main class="admin-frame" :class="{ 'focus-mode': focusMode }">
     <button class="mobile-menu" type="button" aria-label="打开管理导航" @click="drawerOpen = true">☰ 菜单</button>
     <aside class="sidebar desktop-sidebar">
       <div class="sidebar-inner"><RouterLink class="admin-brand" to="/">砂糖橘的秘密小课堂</RouterLink><nav aria-label="管理导航"><RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="nav-item" :class="{ active: item.exact ? activePath === item.to : activePath.startsWith(item.to) }">{{ item.label }}</RouterLink></nav><div class="sidebar-footer"><span v-if="session" class="logout">{{ session.username }}</span><RouterLink class="logout" to="/">返回答题首页</RouterLink><button type="button" @click="logout">退出登录</button></div></div>
@@ -50,6 +52,7 @@ onMounted(() => { void checkSession(); });
 </template>
 
 <style scoped>
+.focus-mode .sidebar,.focus-mode .mobile-menu{display:none}.focus-mode .admin-main{margin-left:0;padding-top:0}
 .admin-frame { min-height: 100vh; background: var(--color-bg); }.sidebar { position: fixed; z-index: 2; inset: 0 auto 0 0; width: 232px; border-right: 1px solid var(--color-border); background: rgba(255, 250, 242, .78); backdrop-filter: blur(18px) saturate(150%); }.sidebar-inner, .drawer-inner { display: flex; height: 100%; flex-direction: column; padding: 24px 14px; }.admin-brand { display: flex; align-items: center; min-height: 32px; padding: 0 10px; color: var(--color-accent); font-size: 15px; font-weight: 750; }nav { display: grid; gap: 5px; margin-top: 42px; }.nav-item { min-height: 44px; display: flex; align-items: center; border-left: 3px solid transparent; border-radius: 0 10px 10px 0; padding: 0 12px; color: var(--color-text-muted); font-size: 15px; font-weight: 650; }.nav-item:hover { color: var(--color-action); background: rgba(255, 240, 216, .65); }.nav-item.active { border-left-color: var(--color-action); color: var(--color-text); background: var(--color-surface-accent); }.sidebar-footer { display: grid; gap: 10px; margin-top: auto; padding: 12px 0 0; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 13px; }.sidebar-footer button, .logout { min-height: 40px; border: 0; border-radius: 10px; color: var(--color-text-muted); background: transparent; text-align: left; }.sidebar-footer button:hover, .logout:hover { color: var(--color-danger); background: #fff0ee; }.admin-main { min-width: 0; min-height: 100vh; margin-left: 232px; }.admin-loading { display: grid; min-height: 100vh; place-items: center; color: var(--color-text-muted); }.mobile-menu { display: none; }
 .sidebar-footer { padding-left: 0; padding-right: 0; }.sidebar-footer > *, .drawer-inner > .logout { padding: 0 10px; }
 @media (max-width: 1023px) { .desktop-sidebar { display: none; }.admin-main { margin-left: 0; padding-top: 58px; }.mobile-menu { position: fixed; z-index: 4; top: 10px; left: 14px; display: inline-flex; min-height: 38px; align-items: center; border: 1px solid var(--color-border); border-radius: 10px; padding: 0 12px; color: var(--color-text); background: rgba(255, 250, 242, .9); font-weight: 700; box-shadow: 0 4px 14px rgba(116, 72, 20, .08); } }
