@@ -31,6 +31,15 @@ export interface BatchDraft {
   pages: BatchPage[];
 }
 
+export type BatchReviewFilter = 'all' | 'saved' | 'pending' | 'draft' | 'deleted';
+
+export function matchesReviewFilter(status: BatchRegion['status'], filter: BatchReviewFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'saved') return status === 'saved';
+  if (filter === 'pending') return status === 'ready' || status === 'pending';
+  return status === filter;
+}
+
 export function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }, width: number, height: number): Rect {
   const x1 = Math.round(Math.max(0, Math.min(width, a.x)));
   const x2 = Math.round(Math.max(0, Math.min(width, b.x)));

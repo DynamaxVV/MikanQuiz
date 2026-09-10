@@ -6,7 +6,7 @@ import { api, ApiError } from '@/api/client';
 import type { OptionGroup } from '@/types';
 import BatchCropCanvas from '@/components/BatchCropCanvas.vue';
 import { addPage, cropImage, decodeImage, deleteDraft, invalidateRegion, isFrozen, listDrafts, readImage, regionProblem, saveDraft, thumbnail,
-  type BatchDraft, type BatchPage, type BatchRegion, type Rect } from '@/lib/batchDrafts';
+  matchesReviewFilter, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
 
 const props = defineProps<{ username: string }>();
 const draft = ref<BatchDraft>();
@@ -26,6 +26,7 @@ const search = ref('');
 const source = ref('');
 const explanationSuggestion = ref('');
 const review = ref(false);
+const reviewFilter = ref<BatchReviewFilter>('all');
 const selectedForSubmit = ref<string[]>([]);
 const pagesOpen = ref(false);
 const mobilePanel = ref('canvas');
@@ -38,8 +39,19 @@ const options = computed(() => groups.value.flatMap((group) => group.options));
 const filteredGroups = computed(() => groups.value.map((group) => ({ ...group, options: group.options.filter((option) => option.name.toLowerCase().includes(search.value.trim().toLowerCase())) })).filter((group) => group.options.length));
 const entries = computed(() => draft.value?.pages.flatMap((page, pageIndex) => page.regions.map((region, regionIndex) => ({ page, pageIndex, region, regionIndex }))) ?? []);
 const candidates = computed(() => entries.value.filter(({ region }) => region.status === 'ready' || region.status === 'pending'));
-const pendingCount = computed(() => entries.value.filter(({ region }) => region.status === 'draft').length);
+const filteredEntries = computed(() => entries.value.filter(({ region }) => matchesReviewFilter(region.status, reviewFilter.value)));
+const filteredCandidates = computed(() => filteredEntries.value.filter(({ region }) => region.status === 'ready' || region.status === 'pending'));
+const reviewFilterOptions = computed(() => [
+  { value: 'all' as const, label: '全部', count: entries.value.length },
+  { value: 'saved' as const, label: '已入库', count: entries.value.filter(({ region }) => region.status === 'saved').length },
+  { value: 'pending' as const, label: '待入库', count: entries.value.filter(({ region }) => region.status === 'ready' || region.status === 'pending').length },
+  { value: 'draft' as const, label: '待补充', count: entries.value.filter(({ region }) => region.status === 'draft').length },
+  { value: 'deleted' as const, label: '已删除', count: entries.value.filter(({ region }) => region.status === 'deleted').length },
+]);
+const draftCount = computed(() => entries.value.filter(({ region }) => region.status === 'draft').length);
 const savedCount = computed(() => entries.value.filter(({ region }) => region.status === 'saved').length);
+const pendingCount = computed(() => entries.value.filter(({ region }) => region.status === 'ready' || region.status === 'pending').length);
+const allVisibleSelected = computed(() => filteredCandidates.value.length > 0 && filteredCandidates.value.every(({ region }) => selectedForSubmit.value.includes(region.id)));
 const frozen = computed(() => !!currentRegion.value && isFrozen(currentRegion.value));
 let revision = 0;
 let savedRevision = 0;
@@ -277,8 +289,16 @@ async function openReview() {
       if (region.status === 'ready') { const problem = regionProblem(region, options.value); if (problem) { region.status = 'draft'; region.error = problem; } }
     });
     selectedForSubmit.value = candidates.value.map(({ region }) => region.id);
+    reviewFilter.value = 'all';
     review.value = true;
   } catch (caught) { error.value = message(caught); }
+}
+function toggleVisibleSelection(event: Event): void {
+  const checked = (event.target as HTMLInputElement).checked;
+  const visibleIds = new Set(filteredCandidates.value.map(({ region }) => region.id));
+  selectedForSubmit.value = checked
+    ? Array.from(new Set([...selectedForSubmit.value, ...visibleIds]))
+    : selectedForSubmit.value.filter((id) => !visibleIds.has(id));
 }
 function reviewEdit(page: BatchPage, region: BatchRegion) { review.value = false; choosePage(page); selectRegion(region.id); mobilePanel.value = 'editor'; }
 async function submit() {
@@ -360,9 +380,10 @@ onBeforeUnmount(() => {
     </div>
     <template v-else-if="review">
       <section class="review-view">
-        <div class="review-heading"><div><h2>检查并入库</h2><p class="muted">已入库 {{ savedCount }} 题 · 待补充 {{ pendingCount }} 题。下面按答题端样式检查题干、题图、选项和解析。</p></div><button :disabled="submitting" @click="review = false">← 继续框选</button></div>
-        <div class="review-actions"><label><input type="checkbox" :disabled="submitting" :checked="candidates.length > 0 && selectedForSubmit.length === candidates.length" @change="selectedForSubmit = ($event.target as HTMLInputElement).checked ? candidates.map(item => item.region.id) : []" />选择全部可提交题目</label><span role="status">{{ submitProgress }}</span><button v-if="submitting" @click="pauseRequested = true">{{ pauseRequested ? '等待当前题完成…' : '暂停提交' }}</button><button v-else class="primary" :disabled="!selectedForSubmit.length" @click="submit">入库／重试 {{ selectedForSubmit.length }} 题</button></div>
-        <article v-for="entry in entries" :key="entry.region.id" class="review-row">
+        <div class="review-heading"><div><h2>检查并入库</h2><p class="muted">已入库 {{ savedCount }} 题 · 待入库 {{ pendingCount }} 题 · 待补充 {{ draftCount }} 题。下面按答题端样式检查题干、题图、选项和解析。</p></div><button :disabled="submitting" @click="review = false">← 继续框选</button></div>
+        <div class="review-filter"><label for="review-status-filter">题目状态</label><select id="review-status-filter" v-model="reviewFilter" :disabled="submitting"><option v-for="option in reviewFilterOptions" :key="option.value" :value="option.value">{{ option.label }} · {{ option.count }}</option></select><span>显示 {{ filteredEntries.length }} / {{ entries.length }} 题</span></div>
+        <div class="review-actions"><label :class="{ disabled: !filteredCandidates.length }"><input type="checkbox" :disabled="submitting || !filteredCandidates.length" :checked="allVisibleSelected" @change="toggleVisibleSelection" />{{ reviewFilter === 'all' ? '选择全部可提交题目' : '选择当前筛选中的可提交题目' }}</label><span role="status">{{ submitProgress }}</span><button v-if="submitting" @click="pauseRequested = true">{{ pauseRequested ? '等待当前题完成…' : '暂停提交' }}</button><button v-else class="primary" :disabled="!selectedForSubmit.length" @click="submit">入库／重试 {{ selectedForSubmit.length }} 题</button></div>
+        <article v-for="entry in filteredEntries" :key="entry.region.id" class="review-row">
           <input v-if="['ready','pending'].includes(entry.region.status)" v-model="selectedForSubmit" :disabled="submitting" type="checkbox" :value="entry.region.id" :aria-label="'选择第 ' + (entry.pageIndex + 1) + ' 页区域 ' + (entry.regionIndex + 1)" />
           <span v-else class="checkbox-space"></span>
           <div class="review-preview">
@@ -382,6 +403,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="review-row-actions"><span class="status-tag" :class="entry.region.status">{{ label(entry.region) }}</span><RouterLink v-if="entry.region.questionId" :to="'/admin/questions/' + entry.region.questionId + '/edit'">题库编辑 ↗</RouterLink><button v-else :disabled="submitting" @click="reviewEdit(entry.page, entry.region)">{{ entry.region.status === 'draft' ? '回到框选' : '编辑区域' }}</button></div>
         </article>
+        <div v-if="!filteredEntries.length" class="review-empty">当前筛选没有题目。</div>
       </section>
     </template>
     <template v-else>
@@ -440,6 +462,7 @@ onBeforeUnmount(() => {
 .toolbar-page-name{display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
 .toolbar-page-check{display:flex;align-items:center;gap:4px;margin-left:auto;white-space:nowrap;color:var(--color-text-muted);font-size:11px}
 .review-view{width:min(1500px,100%);box-sizing:border-box;margin:0 auto}
+.review-filter{display:flex;align-items:center;gap:10px;margin-top:20px;color:var(--color-text-muted);font-size:12px}.review-filter label{font-weight:700;color:var(--color-text)}.review-filter select{min-height:34px;border:1px solid var(--color-border);border-radius:8px;padding:0 28px 0 10px;background:var(--color-surface);color:var(--color-text);font:inherit}.review-filter span{font-size:11px}.review-actions label.disabled{color:var(--color-text-muted)}
 .review-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:18px;padding:18px}
 .review-preview{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr);gap:18px;min-width:0}
 .review-preview-media{display:grid;place-items:center;min-height:150px;padding:10px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface-warm)}
@@ -456,10 +479,11 @@ onBeforeUnmount(() => {
 .preview-option small{font-size:10px}
 .review-explanation{margin:14px 0 0;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .review-row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:96px}
+.review-empty{padding:56px 24px;text-align:center;border:1px dashed var(--color-border);border-radius:10px;color:var(--color-text-muted);background:var(--color-surface)}
 .review-row-actions button{white-space:nowrap}
 .explanation-suggestion{display:block;padding:8px 10px;border-left:3px solid var(--color-action);background:var(--color-surface-accent);color:var(--color-text-muted);line-height:1.6;overflow-wrap:anywhere}
 .explanation-suggestion kbd{padding:1px 4px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-surface);color:var(--color-text);font-size:10px}
 @media(max-width:1199px){.workbench{grid-template-columns:minmax(0,1fr) 300px}}
 @media(max-width:900px){.review-preview{grid-template-columns:120px minmax(0,1fr)}.review-row-actions{min-width:82px}}
-@media(max-width:760px){.batch-workspace{min-height:100dvh}.workbench{min-height:0;overflow:hidden}.toolbar-page-name{max-width:120px}.toolbar-page-check{margin-left:4px}.review-row{grid-template-columns:auto minmax(0,1fr);gap:12px}.review-preview{grid-column:2;grid-template-columns:96px minmax(0,1fr);gap:10px}.review-row-actions{grid-column:2;flex-direction:row;justify-content:flex-end;align-items:center;flex-wrap:wrap}.review-preview-media{min-height:100px;padding:6px}.review-preview-body h3{font-size:15px}}
+@media(max-width:760px){.batch-workspace{min-height:100dvh}.workbench{min-height:0;overflow:hidden}.toolbar-page-name{max-width:120px}.toolbar-page-check{margin-left:4px}.review-filter{flex-wrap:wrap;margin-top:16px}.review-filter select{flex:1;min-width:150px}.review-filter span{width:100%}.review-row{grid-template-columns:auto minmax(0,1fr);gap:12px}.review-preview{grid-column:2;grid-template-columns:96px minmax(0,1fr);gap:10px}.review-row-actions{grid-column:2;flex-direction:row;justify-content:flex-end;align-items:center;flex-wrap:wrap}.review-preview-media{min-height:100px;padding:6px}.review-preview-body h3{font-size:15px}}
 </style>

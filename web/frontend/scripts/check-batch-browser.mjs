@@ -169,6 +169,14 @@ try {
   await page.locator('.review-view').waitFor();
   assert.equal(await page.locator('.review-preview').count(), 3);
   assert.equal(await page.locator('.review-preview-options').count(), 3);
+  const statusFilter = page.getByLabel('题目状态');
+  assert.deepEqual(await statusFilter.locator('option').allTextContents(), ['全部 · 3', '已入库 · 0', '待入库 · 2', '待补充 · 1', '已删除 · 0']);
+  await statusFilter.selectOption('pending');
+  assert.equal(await page.locator('.review-preview').count(), 2);
+  await statusFilter.selectOption('draft');
+  assert.equal(await page.locator('.review-preview').count(), 1);
+  await statusFilter.selectOption('all');
+  assert.equal(await page.locator('.review-preview').count(), 3);
   assert.equal(await page.locator('.review-preview h3').first().textContent(), '请选择以下日文对应的汉字字体');
   assert.equal(await page.locator('.review-preview .preview-option').filter({ hasText: '正确' }).count(), 0, 'Selected review options should not add a redundant label');
   failUpload = true;

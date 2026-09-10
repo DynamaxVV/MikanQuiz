@@ -11,6 +11,7 @@ const router = createRouter({
     { path: '/font-reference', component: () => import('@/pages/FontReferencePage.vue'), meta: { title: '嵌字笔记' } },
     { path: '/admin/login', component: () => import('@/pages/admin/AdminLoginPage.vue'), meta: { title: '管理员登录' } },
     { path: '/admin/questions', component: () => import('@/pages/admin/AdminQuestionsPage.vue'), meta: { title: '题库', admin: true } },
+    { path: '/admin/questions/batch', component: () => import('@/pages/admin/AdminBatchQuestionsPage.vue'), meta: { title: '批量制题', admin: true } },
     { path: '/admin/questions/new', component: () => import('@/pages/admin/AdminQuestionFormPage.vue'), meta: { title: '新增题目', admin: true } },
     { path: '/admin/questions/:id', component: () => import('@/pages/admin/AdminQuestionDetailPage.vue'), meta: { title: '题目详情', admin: true } },
     { path: '/admin/questions/:id/edit', component: () => import('@/pages/admin/AdminQuestionFormPage.vue'), meta: { title: '编辑题目', admin: true } },
