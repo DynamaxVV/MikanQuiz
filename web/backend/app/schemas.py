@@ -89,14 +89,21 @@ class QuestionWrite(ApiModel):
     @field_validator("image_url", mode="after")
     @classmethod
     def validate_image_url(cls, value: str) -> str:
-        """Require an externally deliverable HTTPS image for every question."""
+        """Require HTTPS, with loopback HTTP reserved for local image storage."""
         value = value.strip()
         if not value:
             raise ValueError("请上传题图")
         parsed = urlparse(value)
-        if parsed.scheme != "https" or not parsed.netloc:
+        local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if (parsed.scheme != "https" and not local_http) or not parsed.netloc:
             raise ValueError("图片地址必须是 HTTPS URL")
         return value
+
+
+class QuestionCreate(QuestionWrite):
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=64,
+                                         pattern=r"^[a-zA-Z0-9_-]+$")
+
 
 class QuestionPatch(ApiModel):
     """A partial question update, validated as a whole after merging server data."""

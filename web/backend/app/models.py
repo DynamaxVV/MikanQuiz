@@ -87,6 +87,16 @@ class Question(Base):
     )
 
 
+class QuestionRequest(Base):
+    """Creation receipts survive question deletion and make batch retries safe."""
+
+    __tablename__ = "question_requests"
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"), primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    question_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class QuizSettings(Base):
     """The single configurable draw strategy and font preset list."""
 

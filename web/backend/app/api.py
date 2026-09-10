@@ -37,6 +37,7 @@ from app.schemas import (
     OptionGroupResponse,
     HealthResponse,
     ImageUploadResponse,
+    QuestionCreate,
     QuestionExportItem,
     QuestionImportPayload,
     QuestionImportResult,
@@ -474,16 +475,24 @@ def list_admin_questions(
 
 @router.post("/admin/questions", response_model=QuestionResponse, status_code=201)
 def create_admin_question(
-    data: QuestionWrite,
+    data: QuestionCreate,
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> QuestionResponse:
     """Create one validated question from the PC editor form."""
-    question = question_service.create_question(session, data)
-    sync_service.enqueue_scope(session, "questions")
+    values = QuestionWrite.model_validate(data.model_dump(exclude={"client_request_id"}))
+    if data.client_request_id:
+        question, created = question_service.create_question_once(
+            session, values, auth.admin.id, data.client_request_id,
+        )
+    else:
+        question, created = question_service.create_question(session, values), True
+    if created:
+        sync_service.enqueue_scope(session, "questions")
     session.commit()
     log_event(
-        "question_created", admin_username=auth.admin.username, question_id=question.id
+        "question_created" if created else "question_creation_replayed",
+        admin_username=auth.admin.username, question_id=question.id
     )
     return admin_question(session, question)
 

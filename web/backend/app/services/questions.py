@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy import func, select, asc, desc, text, case
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.sqlite import insert
 
 from app.errors import ApiError
-from app.models import FontOption, FontReference, FontReferenceSection, OptionGroup, Question, QuizAttempt, QuizSettings, as_utc, to_pinyin
+from app.models import FontOption, FontReference, FontReferenceSection, OptionGroup, Question, QuestionRequest, QuizAttempt, QuizSettings, as_utc, to_pinyin
 from app.schemas import (
     FontOptionWrite,
     FontReferenceCatalogUpdate,
@@ -66,6 +67,26 @@ def create_question(session: Session, data: QuestionWrite) -> Question:
     session.add(question)
     session.flush()
     return question
+
+
+def create_question_once(session: Session, data: QuestionWrite, admin_id: int,
+                         request_id: str) -> tuple[Question, bool]:
+    """Reserve the request in the same SQLite transaction as question creation."""
+    payload = data.model_dump()
+    result = session.execute(insert(QuestionRequest).values(
+        admin_id=admin_id, request_id=request_id, payload=payload,
+    ).on_conflict_do_nothing())
+    receipt = session.get(QuestionRequest, (admin_id, request_id))
+    if result.rowcount == 0:
+        if receipt.payload != payload:
+            raise ApiError(409, "QUESTION_REQUEST_CONFLICT", "该提交标识已用于不同内容，请先确认原提交结果")
+        question = session.scalar(select(Question).where(Question.config_key == receipt.question_key))
+        if question is None:
+            raise ApiError(409, "QUESTION_REQUEST_DELETED", "这道题曾经入库但已被删除，不会重复创建")
+        return question, False
+    question = create_question(session, data)
+    receipt.question_key = question.config_key
+    return question, True
 
 
 def get_question(session: Session, question_id: int) -> Question:

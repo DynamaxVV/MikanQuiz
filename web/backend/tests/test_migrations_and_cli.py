@@ -16,7 +16,7 @@ def test_empty_database_migration_has_integrity_and_seed(database_url: str) -> N
     connection = sqlite3.connect(path)
     try:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "20260828_0011"
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "20260909_0012"
         assert connection.execute("SELECT question_count FROM quiz_settings WHERE id = 1").fetchone()[0] == 10
     finally:
         connection.close()
