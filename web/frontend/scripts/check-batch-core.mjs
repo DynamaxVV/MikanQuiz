@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { rectFromPoints, invalidateRegion, matchesReviewFilter, regionProblem, updateDifficulty } from '../src/lib/batchDrafts.ts';
+import { cachedExplanation, normalizeDraft, rectFromPoints, invalidateRegion, matchesReviewFilter, regionProblem, rememberExplanation, updateDifficulty } from '../src/lib/batchDrafts.ts';
 
 assert.deepEqual(rectFromPoints({ x: 500.2, y: 400 }, { x: -10, y: 80 }, 300, 250), { x: 0, y: 80, width: 300, height: 170 });
 const region = { id: 'region', x: 0, y: 0, width: 40, height: 60, status: 'ready', preview: 'preview', uploadUrl: 'old-upload',
@@ -32,4 +32,8 @@ assert.equal(matchesReviewFilter('pending', 'pending'), true);
 assert.equal(matchesReviewFilter('draft', 'pending'), false);
 assert.equal(matchesReviewFilter('draft', 'draft'), true);
 assert.equal(matchesReviewFilter('deleted', 'deleted'), true);
+const batchDraft = { explanationCache: {} };
+rememberExplanation(batchDraft, 'font-1', ' 本批次解析 ');
+assert.equal(cachedExplanation(batchDraft, 'font-1'), '本批次解析');
+assert.equal(cachedExplanation(normalizeDraft({ ...batchDraft, explanationCache: undefined }), 'font-1'), '');
 console.log('Batch geometry, validation and immutable pending-request checks passed.');

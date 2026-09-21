@@ -1,7 +1,7 @@
 import { onBeforeUnmount, ref } from 'vue';
 import { api } from '@/api/client';
 
-/** Share the latest reusable explanation draft through the server, not browser storage. */
+/** Share the global reusable explanation draft through the server; batch-local storage is layered by the caller. */
 export function useFontExplanationCache() {
   const suggestion = ref('');
   let requestVersion = 0;

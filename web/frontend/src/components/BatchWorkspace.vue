@@ -7,7 +7,7 @@ import type { OptionGroup } from '@/types';
 import BatchCropCanvas from '@/components/BatchCropCanvas.vue';
 import { useFontExplanationCache } from '@/composables/useFontExplanationCache';
 import { addPage, cropImage, decodeImage, deleteDraft, invalidateRegion, isFrozen, listDrafts, readImage, regionProblem, saveDraft, thumbnail,
-  matchesReviewFilter, updateDifficulty, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
+  cachedExplanation, matchesReviewFilter, rememberExplanation, updateDifficulty, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
 
 const props = defineProps<{ username: string }>();
 const draft = ref<BatchDraft>();
@@ -25,7 +25,7 @@ const pauseRequested = ref(false);
 const submitProgress = ref('');
 const search = ref('');
 const source = ref('');
-const { suggestion: explanationSuggestion, load: loadExplanationCache, input: saveExplanationCache, flush: flushExplanationCache } = useFontExplanationCache();
+const { suggestion: explanationSuggestion, load: loadExplanationCache, input: saveExplanationCache, flush: flushExplanationCache, reset: resetExplanationCache } = useFontExplanationCache();
 const review = ref(false);
 const reviewFilter = ref<BatchReviewFilter>('all');
 const selectedForSubmit = ref<string[]>([]);
@@ -121,7 +121,7 @@ async function newBatch() {
       inputValue: `漫画制题 ${new Date().toLocaleDateString('zh-CN')}`, inputValidator: (value) => !!value?.trim() && value.length <= 100 || '请输入 1–100 字的批次名',
       confirmButtonText: '创建', cancelButtonText: '取消',
     });
-    const item: BatchDraft = { id: crypto.randomUUID(), owner: props.username, name: value.trim(), updatedAt: Date.now(), defaultDifficulty: 2, pageId: '', regionId: '', pages: [] };
+    const item: BatchDraft = { id: crypto.randomUUID(), owner: props.username, name: value.trim(), updatedAt: Date.now(), defaultDifficulty: 2, pageId: '', regionId: '', pages: [], explanationCache: {} };
     await saveDraft(item);
     await openBatch(item.id);
     void navigator.storage?.persist?.().catch(() => undefined);
@@ -223,7 +223,14 @@ function changeRegion(id: string, rect: Rect) {
 function editRegion() { if (currentRegion.value) invalidateRegion(currentRegion.value); }
 async function refreshExplanationSuggestion(): Promise<void> {
   const region = currentRegion.value;
-  await loadExplanationCache(region?.form.correctOptionId ?? '', () => currentRegion.value?.form.explanation ?? '');
+  const fontOptionId = region?.form.correctOptionId ?? '';
+  const local = draft.value && fontOptionId ? cachedExplanation(draft.value, fontOptionId) : '';
+  if (local && !region?.form.explanation.trim()) {
+    resetExplanationCache();
+    explanationSuggestion.value = local;
+    return;
+  }
+  await loadExplanationCache(fontOptionId, () => currentRegion.value?.form.explanation ?? '');
 }
 function fontSelected(optionId: string): void {
   const region = currentRegion.value;
@@ -241,13 +248,18 @@ function difficultyChanged(event: Event): void {
 }
 function explanationInput(): void {
   const region = currentRegion.value;
-  if (region) saveExplanationCache(region.form.correctOptionId, region.form.explanation);
+  if (region && draft.value) {
+    rememberExplanation(draft.value, region.form.correctOptionId, region.form.explanation);
+    saveExplanationCache(region.form.correctOptionId, region.form.explanation);
+  }
 }
 function acceptExplanationSuggestion(event: KeyboardEvent): void {
   const region = currentRegion.value;
   if (!region || isFrozen(region) || !explanationSuggestion.value) return;
   event.preventDefault();
   region.form.explanation = explanationSuggestion.value;
+  if (draft.value) rememberExplanation(draft.value, region.form.correctOptionId, region.form.explanation);
+  saveExplanationCache(region.form.correctOptionId, region.form.explanation);
   explanationSuggestion.value = '';
   editRegion();
   void persist();
@@ -255,7 +267,6 @@ function acceptExplanationSuggestion(event: KeyboardEvent): void {
 watch(() => [currentRegion.value?.id, currentRegion.value?.form.correctOptionId], () => { void refreshExplanationSuggestion(); }, { immediate: true });
 function previewGroups(region: BatchRegion): OptionGroup[] {
   return groups.value.map((group) => ({ ...group, options: group.options.filter((option) => option.minimumDifficulty <= region.form.difficulty) })).filter((group) => group.options.length);
-  saveExplanationCache(region.form.correctOptionId, region.form.explanation);
 }
 async function completeRegion() {
   const region = currentRegion.value; const page = currentPage.value;
@@ -264,13 +275,13 @@ async function completeRegion() {
   if (region.error) return;
   processing.value = true;
   try {
+    flushExplanationCache();
     const crop = await cropImage(page, region);
     region.preview = crop.preview;
     region.status = 'ready';
     if (await persist()) { draft.value!.regionId = ''; mobilePanel.value = 'canvas'; await nextTick(); canvas.value?.focusCanvas(); }
   } catch (caught) { region.error = message(caught); }
   finally { processing.value = false; }
-    flushExplanationCache();
 }
 function leaveForLater() { if (draft.value) { draft.value.regionId = ''; mobilePanel.value = 'canvas'; void persist(); canvas.value?.focusCanvas(); } }
 function deleteRegion() {
@@ -304,12 +315,12 @@ function toggleVisibleSelection(event: Event): void {
 function reviewEdit(page: BatchPage, region: BatchRegion) { review.value = false; choosePage(page); selectRegion(region.id); mobilePanel.value = 'editor'; }
 async function submit() {
   if (submitting.value || !selectedForSubmit.value.length || !await persist()) return;
+  flushExplanationCache();
   submitting.value = true; pauseRequested.value = false; error.value = '';
   try {
     const session = await api.getAdminSession();
     if (session.username !== props.username) throw new Error('管理员账号已改变，请返回批次列表并重新登录原账号');
     const selected = candidates.value.filter(({ region }) => selectedForSubmit.value.includes(region.id));
-  flushExplanationCache();
     for (const [index, { page, region }] of selected.entries()) {
       if (pauseRequested.value) break;
       submitProgress.value = `正在提交 ${index + 1} / ${selected.length}`;

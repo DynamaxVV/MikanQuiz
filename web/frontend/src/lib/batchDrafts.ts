@@ -29,6 +29,8 @@ export interface BatchDraft {
   pageId: string;
   regionId: string;
   pages: BatchPage[];
+  /** Reusable explanations learned inside this batch only. */
+  explanationCache: Record<string, string>;
 }
 
 export type BatchReviewFilter = 'all' | 'saved' | 'pending' | 'draft' | 'deleted';
@@ -77,6 +79,19 @@ export function regionProblem(region: BatchRegion, options: { id: string; minimu
   return '';
 }
 
+export function normalizeDraft(draft: BatchDraft): BatchDraft {
+  return { ...draft, explanationCache: { ...(draft.explanationCache ?? {}) } };
+}
+
+export function cachedExplanation(draft: BatchDraft, fontOptionId: string): string {
+  return draft.explanationCache?.[fontOptionId]?.trim() ?? '';
+}
+
+export function rememberExplanation(draft: BatchDraft, fontOptionId: string, explanation: string): void {
+  const value = explanation.trim();
+  if (fontOptionId && value) draft.explanationCache[fontOptionId] = value;
+}
+
 let connection: Promise<IDBDatabase> | undefined;
 function database(): Promise<IDBDatabase> {
   return connection ??= new Promise((resolve, reject) => {
@@ -109,11 +124,11 @@ async function transaction<T>(stores: string[], mode: IDBTransactionMode, run: (
 
 export async function listDrafts(owner: string): Promise<BatchDraft[]> {
   const drafts = await transaction<BatchDraft[]>(['drafts'], 'readonly', (tx) => tx.objectStore('drafts').getAll());
-  return drafts.filter((draft) => draft.owner === owner).sort((a, b) => b.updatedAt - a.updatedAt);
+  return drafts.map(normalizeDraft).filter((draft) => draft.owner === owner).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function saveDraft(draft: BatchDraft): Promise<IDBValidKey> {
-  return transaction(['drafts'], 'readwrite', (tx) => tx.objectStore('drafts').put(draft));
+  return transaction(['drafts'], 'readwrite', (tx) => tx.objectStore('drafts').put(normalizeDraft(draft)));
 }
 
 export function readImage(id: string): Promise<Blob | undefined> {

@@ -147,6 +147,7 @@ try {
   assert.equal((await stored()).pages[0].regions[0].width, 520);
   await complete('第一处合成解析');
   // Zoom and create in source coordinates, then check native crop dimensions.
+  explanationCaches.set(1, '服务端不同解析');
   await page.getByRole('button', { name: '缩小', exact: true }).click();
   await draw(80, 270, 450, 120);
   await page.getByRole('radio', { name: '合成黑体', exact: true }).check();
