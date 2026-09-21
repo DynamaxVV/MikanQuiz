@@ -65,6 +65,20 @@ class FontOption(Base):
     )
 
 
+class FontExplanationCache(Base):
+    """The latest reusable explanation draft for one font, shared by all admins and clients."""
+
+    __tablename__ = "font_explanation_caches"
+
+    font_option_id: Mapped[int] = mapped_column(
+        ForeignKey("font_options.id", ondelete="CASCADE"), primary_key=True
+    )
+    explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class Question(Base):
     """A question whose correct response is one reusable font option."""
 

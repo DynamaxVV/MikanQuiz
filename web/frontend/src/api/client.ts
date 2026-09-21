@@ -49,6 +49,7 @@ interface RawQuestion {
 
 interface RawFontOption { id: number; name: string; font_url: string | null; minimum_difficulty: number; sort_order: number; }
 interface RawOptionGroup { id: number; name: string; sort_order: number; options: RawFontOption[]; }
+interface RawFontExplanationCache { font_option_id: number; explanation: string; updated_at?: string | null; }
 
 interface RawSettings {
   question_count: number;
@@ -521,6 +522,15 @@ export const api = {
   getAdminSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/admin/settings')),
 
   getOptionGroups: async (): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups')).map(mapGroup),
+  getFontExplanationCache: async (fontOptionId: string): Promise<string> =>
+    (await request<RawFontExplanationCache>(`/admin/font-explanation-cache/${encodeURIComponent(fontOptionId)}`)).explanation,
+
+  saveFontExplanationCache: async (fontOptionId: string, explanation: string): Promise<void> => {
+    await request<RawFontExplanationCache>(`/admin/font-explanation-cache/${encodeURIComponent(fontOptionId)}`, {
+      method: 'PUT', body: JSON.stringify({ explanation }),
+    });
+  },
+
 
   saveOptionGroups: async (groups: OptionGroup[]): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups', { method: 'PUT', body: JSON.stringify({ groups: groups.map((group) => ({ id: Number(group.id) || undefined, name: group.name, sort_order: group.sortOrder, options: group.options.map((option) => ({ id: Number(option.id) || undefined, name: option.name, font_url: option.fontUrl || undefined, minimum_difficulty: option.minimumDifficulty, sort_order: option.sortOrder })) })) }) })).map(mapGroup),
 

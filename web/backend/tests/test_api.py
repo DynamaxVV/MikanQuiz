@@ -214,6 +214,54 @@ def test_web_login_uses_http_only_cookie_and_logout_clears_it(client: TestClient
     assert "max-age=0" in logout.headers["set-cookie"].lower()
 
 
+def test_font_explanation_cache_is_server_side_and_shared_by_font(client: TestClient) -> None:
+    """A cache survives the editor flow because it is keyed only by the font option."""
+    headers, questions = configure_two_question_quiz(client)
+    font_option_id = questions[0]["correct_option_id"]
+    endpoint = f"/api/v1/admin/font-explanation-cache/{font_option_id}"
+
+    empty = client.get(endpoint, headers=headers)
+    assert empty.status_code == 200
+    assert empty.json()["explanation"] == ""
+    assert empty.json()["updated_at"] is None
+
+    saved = client.put(endpoint, headers=headers, json={"explanation": "看横画收笔和撇捺关系"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["explanation"] == "看横画收笔和撇捺关系"
+
+    reread = client.get(endpoint, headers=headers)
+    assert reread.status_code == 200
+    assert reread.json()["explanation"] == "看横画收笔和撇捺关系"
+    assert reread.json()["updated_at"]
+
+    invalid = client.put(endpoint, headers=headers, json={"explanation": "   "})
+    assert invalid.status_code == 422
+
+
+def test_font_explanation_cache_is_server_side_and_shared_by_font(client: TestClient) -> None:
+    """A cache survives the editor flow because it is keyed only by the font option."""
+    headers, questions = configure_two_question_quiz(client)
+    font_option_id = questions[0]["correct_option_id"]
+    endpoint = f"/api/v1/admin/font-explanation-cache/{font_option_id}"
+
+    empty = client.get(endpoint, headers=headers)
+    assert empty.status_code == 200
+    assert empty.json()["explanation"] == ""
+    assert empty.json()["updated_at"] is None
+
+    saved = client.put(endpoint, headers=headers, json={"explanation": "看横画收笔和撇捺关系"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["explanation"] == "看横画收笔和撇捺关系"
+
+    reread = client.get(endpoint, headers=headers)
+    assert reread.status_code == 200
+    assert reread.json()["explanation"] == "看横画收笔和撇捺关系"
+    assert reread.json()["updated_at"]
+
+    invalid = client.put(endpoint, headers=headers, json={"explanation": "   "})
+    assert invalid.status_code == 422
+
+
 def test_disabled_administrator_immediately_loses_existing_session(
     client: TestClient, database: Database
 ) -> None:

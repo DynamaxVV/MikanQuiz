@@ -61,6 +61,50 @@ class FontOptionResponse(ApiModel):
     sort_order: int
 
 
+class FontExplanationCacheWrite(ApiModel):
+    """One reusable explanation draft saved for a catalogue font."""
+
+    explanation: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("explanation", mode="after")
+    @classmethod
+    def strip_explanation(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("解析不能为空")
+        return value
+
+
+class FontExplanationCacheResponse(ApiModel):
+    """The cached explanation, or an empty value when none has been saved yet."""
+
+    font_option_id: int
+    explanation: str = Field(max_length=1000)
+    updated_at: datetime | None = None
+
+
+class FontExplanationCacheWrite(ApiModel):
+    """One reusable explanation draft saved for a catalogue font."""
+
+    explanation: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("explanation", mode="after")
+    @classmethod
+    def strip_explanation(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("解析不能为空")
+        return value
+
+
+class FontExplanationCacheResponse(ApiModel):
+    """The cached explanation, or an empty value when none has been saved yet."""
+
+    font_option_id: int
+    explanation: str = Field(max_length=1000)
+    updated_at: datetime | None = None
+
+
 class OptionGroupResponse(ApiModel):
     id: int
     name: str

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api } from '@/api/client';
 import { useFontRendering } from '@/composables/useFontRendering';
+import { useFontExplanationCache } from '@/composables/useFontExplanationCache';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import AdminShell from '@/components/AdminShell.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
@@ -20,6 +21,7 @@ const saving = ref(false);
 const pendingImageFile = ref<File | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const error = ref('');
+const { suggestion: explanationSuggestion, load: loadExplanationCache, input: saveExplanationCache, flush: flushExplanationCache } = useFontExplanationCache();
 
 const previewUrl = computed(() => {
   if (pendingImageFile.value) return URL.createObjectURL(pendingImageFile.value);
@@ -34,6 +36,7 @@ function resetForm(): void {
   form.difficulty = 2;
   form.correctOptionId = '';
   form.explanation = '';
+  explanationSuggestion.value = '';
   error.value = '';
 }
 
@@ -95,6 +98,22 @@ function triggerFileInput(): void {
   fileInputRef.value?.click();
 }
 
+function fontSelected(optionId: string): void {
+  void loadExplanationCache(optionId, () => form.explanation);
+}
+
+function explanationInput(): void {
+  saveExplanationCache(form.correctOptionId, form.explanation);
+}
+
+function acceptExplanationSuggestion(event: KeyboardEvent): void {
+  if (!explanationSuggestion.value) return;
+  event.preventDefault();
+  form.explanation = explanationSuggestion.value;
+  saveExplanationCache(form.correctOptionId, form.explanation);
+  explanationSuggestion.value = '';
+}
+
 async function save(): Promise<void> {
   if (!form.text.trim() || !previewUrl.value || !form.correctOptionId || !form.explanation.trim()) {
     error.value = '请填写题干、上传题图、选择正确字体并填写解析。';
@@ -103,6 +122,7 @@ async function save(): Promise<void> {
   saving.value = true;
   error.value = '';
   try {
+    flushExplanationCache();
     let imageUrl = form.imageUrl;
     if (pendingImageFile.value) {
       imageUrl = await api.uploadImage(pendingImageFile.value);
@@ -138,7 +158,7 @@ onBeforeUnmount(() => { document.removeEventListener('paste', onPaste); });
     <span>点击选择图片 或 Ctrl+V 粘贴</span>
     <small>支持 JPEG、PNG、GIF、WebP</small>
   </template>
-</div></div></section><section class="card"><div class="section-heading"><span>02</span><div><h2>正确字体</h2><p>只需选择正确项，候选项由字体快捷项统一维护。</p></div></div><div class="group-grid"><div class="group-col"><section v-for="group in leftGroups" :key="group.id" class="answer-group"><h3>{{ group.name }}</h3><label v-for="option in group.options" :key="option.id" class="option" :class="{ selected: form.correctOptionId === option.id }"><input v-model="form.correctOptionId" type="radio" :value="option.id" /><span>{{ option.name }}</span></label></section></div><div class="group-col"><section v-for="group in rightGroups" :key="group.id" class="answer-group"><h3>{{ group.name }}</h3><label v-for="option in group.options" :key="option.id" class="option" :class="{ selected: form.correctOptionId === option.id }"><input v-model="form.correctOptionId" type="radio" :value="option.id" /><span>{{ option.name }}</span></label></section></div></div></section><section class="card"><div class="section-heading"><span>03</span><div><h2>题目解析</h2><p>提交后会展示给答题者。</p></div></div><label class="field"><textarea v-model="form.explanation" maxlength="1000" placeholder="写下判别依据或补充说明" /></label></section></div><aside class="preview"><p class="preview-label">答题端预览</p><label class="font-render-toggle">
+</div></div></section><section class="card"><div class="section-heading"><span>02</span><div><h2>正确字体</h2><p>只需选择正确项，候选项由字体快捷项统一维护。</p></div></div><div class="group-grid"><div class="group-col"><section v-for="group in leftGroups" :key="group.id" class="answer-group"><h3>{{ group.name }}</h3><label v-for="option in group.options" :key="option.id" class="option" :class="{ selected: form.correctOptionId === option.id }"><input v-model="form.correctOptionId" type="radio" :value="option.id" @change="fontSelected(option.id)" /><span>{{ option.name }}</span></label></section></div><div class="group-col"><section v-for="group in rightGroups" :key="group.id" class="answer-group"><h3>{{ group.name }}</h3><label v-for="option in group.options" :key="option.id" class="option" :class="{ selected: form.correctOptionId === option.id }"><input v-model="form.correctOptionId" type="radio" :value="option.id" @change="fontSelected(option.id)" /><span>{{ option.name }}</span></label></section></div></div></section><section class="card"><div class="section-heading"><span>03</span><div><h2>题目解析</h2><p>提交后会展示给答题者。</p></div></div><label class="field"><textarea v-model="form.explanation" maxlength="1000" :placeholder="explanationSuggestion || '写下判别依据或补充说明'" @input="explanationInput" @keydown.tab="acceptExplanationSuggestion" /><small v-if="explanationSuggestion" class="explanation-suggestion" role="status">已有该字体解析，按 <kbd>Tab</kbd> 采用</small></label></section></div><aside class="preview"><p class="preview-label">答题端预览</p><label class="font-render-toggle">
     <span class="toggle-label">即时渲染字体</span>
     <span class="toggle-track" :class="{ on: fontRenderEnabled }" @click.prevent="fontRenderEnabled = !fontRenderEnabled" role="switch" :aria-checked="fontRenderEnabled" tabindex="0"><span class="toggle-thumb"></span></span>
   </label><section class="preview-card card"><p class="eyebrow">第 1 题 · {{ '★'.repeat(form.difficulty) }}</p><h2>{{ form.text || '题干会显示在这里' }}</h2><img v-if="previewUrl" :src="previewUrl" alt="题图预览" /><div v-for="group in visibleGroups" :key="group.id" class="preview-group"><h3>{{ group.name }}</h3><span v-for="option in group.options" :key="option.id" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ correct: form.correctOptionId === option.id }">{{ option.name }}</span></div></section></aside><p v-if="error" class="status-error" role="alert">{{ error }}</p><footer class="save-bar"><p>保存后，题目会立即使用当前字体分区规则。</p><button :disabled="saving" class="save-button">
@@ -163,4 +183,5 @@ onBeforeUnmount(() => { document.removeEventListener('paste', onPaste); });
 .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; margin-right: 6px; } @keyframes spin { to { transform: rotate(360deg); } }
 .save-button { display: inline-flex; align-items: center; }.star-picker { display: flex; gap: 6px; }.star-picker button { border: 0; padding: 0; background: transparent; color: #dfd2c4; font-size: 30px; line-height: 1; cursor: pointer; }.star-picker button.active { color: #ff9800; }.image-preview { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 10px; border: 1px solid #efdbc1; border-radius: 12px; background: #fff8ed; }.image-preview img { width: 120px; height: 84px; object-fit: cover; border-radius: 8px; }.image-preview div { display: grid; gap: 8px; font-size: 13px; }.image-preview button { justify-self: start; min-height: 30px; border: 1px solid #edcfac; border-radius: 8px; padding: 0 9px; color: #93551e; background: #fff; }.group-grid { display: flex; gap: 10px; }.group-col { flex: 1; min-width: 0; display: grid; gap: 10px; align-content: start; }.answer-group { padding: 10px; border: 1px solid var(--color-border); border-radius: 12px; background: #fffdf9; }.answer-group h3, .preview-group h3 { margin: 0 0 5px; color: #85451e; font-size: 12px; }.option, .preview-group span { display: inline-flex; align-items: center; gap: 5px; margin: 0 4px 4px 0; border: 1px solid transparent; border-radius: 10px; padding: 0 6px; height: 34px; line-height: 1.2; color: var(--color-text-muted); background: var(--color-surface-warm); font-size: 13px; cursor: pointer; }.option input { width: auto; margin: 0; }.option.selected, .preview-group .correct { border-color: #d58a45; color: #85451e; background: #fff0d8; }.preview { align-self: start; position: sticky; top: 20px; }.preview-label { margin: 0 0 8px; color: var(--color-text-muted); font-size: 13px; font-weight: 750; }.font-render-toggle { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; cursor: pointer; user-select: none; }.toggle-label { color: var(--color-text-muted); font-size: 12px; font-weight: 650; }.toggle-track { position: relative; width: 44px; height: 26px; border-radius: 999px; background: #e3d7c7; cursor: pointer; transition: background 160ms ease-out; outline: none; }.toggle-track.on { background: var(--color-action); }.toggle-thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(73, 48, 26, 0.16); transition: transform 180ms ease-out; }.toggle-track.on .toggle-thumb { transform: translateX(18px); }.preview-card { background: #fffdf9; }.preview-card > img { width: 100%; max-height: 210px; object-fit: cover; border-radius: 10px; margin: 14px 0; }.preview-group { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }.save-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 20px; border: 1px solid #efdbc1; border-radius: 14px; background: #fff8ed; }.save-bar p { margin: 0; color: var(--color-text-muted); font-size: 13px; }.save-bar button { min-height: 44px; border: 0; border-radius: var(--radius-button); padding: 0 20px; color: #fff; background: var(--color-action); font-weight: 750; }.save-bar button:disabled { opacity: .65; }
 @media (max-width: 900px) { .admin-content { width: min(100% - 32px, 1120px); padding-top: 28px; }.editor { grid-template-columns: 1fr; }.preview { position: static; }.save-bar { grid-column: auto; } } @media (max-width: 600px) { .batch-entry-card { align-items: flex-start; }.batch-entry-arrow { margin: 3px 0 0 auto; font-size: 0; }.batch-entry-arrow::after { content: '→'; font-size: 18px; }.save-bar { flex-direction: column; }.two-fields, .group-grid { grid-template-columns: 1fr; }.save-bar button { width: 100%; } }
+.explanation-suggestion { display: block; padding: 8px 10px; border-left: 3px solid var(--color-action); background: var(--color-surface-accent); color: var(--color-text-muted); line-height: 1.6; overflow-wrap: anywhere; }.explanation-suggestion kbd { padding: 1px 4px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-text); font-size: 10px; }
 </style>

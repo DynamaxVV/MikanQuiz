@@ -17,7 +17,7 @@ from app.config import AppSettings
 from app.database import get_session
 from app.errors import ApiError
 from app.logging import log_event
-from app.models import Admin, AdminSession, Feedback, FeedbackAttachment, FontOption, FontReference, FontReferenceSection, Question, Submission, as_utc, utc_now
+from app.models import Admin, AdminSession, Feedback, FeedbackAttachment, FontExplanationCache, FontOption, FontReference, FontReferenceSection, Question, Submission, as_utc, utc_now
 from app.schemas import (
     AdminCredentials,
     AdminSessionResponse,
@@ -33,6 +33,8 @@ from app.schemas import (
     FontReferenceResponse,
     FontReferenceSectionResponse,
     FeedbackResponse,
+    FontExplanationCacheResponse,
+    FontExplanationCacheWrite,
     OptionCatalogUpdate,
     FontReferenceWrite,
     OptionGroupResponse,
@@ -860,6 +862,58 @@ def get_option_catalog(
 ) -> list[OptionGroupResponse]:
     """Return the catalogue used by both the editor and public quiz snapshots."""
     return catalogue(session)
+@router.get(
+    "/admin/font-explanation-cache/{font_option_id:int}",
+    response_model=FontExplanationCacheResponse,
+)
+def get_admin_font_explanation_cache(
+    font_option_id: int,
+    _: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> FontExplanationCacheResponse:
+    """Read the globally shared explanation draft for one catalogue font."""
+    if session.get(FontOption, font_option_id) is None:
+        raise ApiError(404, "FONT_OPTION_NOT_FOUND", "字体不存在")
+    cached = session.get(FontExplanationCache, font_option_id)
+    return FontExplanationCacheResponse(
+        font_option_id=font_option_id,
+        explanation=cached.explanation if cached else "",
+        updated_at=as_utc(cached.updated_at) if cached else None,
+    )
+
+
+@router.put(
+    "/admin/font-explanation-cache/{font_option_id:int}",
+    response_model=FontExplanationCacheResponse,
+)
+def save_admin_font_explanation_cache(
+    font_option_id: int,
+    data: FontExplanationCacheWrite,
+    auth: AdminAuth = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> FontExplanationCacheResponse:
+    """Save one reusable explanation draft without tying it to an account or question."""
+    if session.get(FontOption, font_option_id) is None:
+        raise ApiError(404, "FONT_OPTION_NOT_FOUND", "字体不存在")
+    cached = session.get(FontExplanationCache, font_option_id)
+    if cached is None:
+        cached = FontExplanationCache(font_option_id=font_option_id, explanation=data.explanation)
+        session.add(cached)
+    else:
+        cached.explanation = data.explanation
+    session.commit()
+    log_event(
+        "font_explanation_cache_saved",
+        admin_username=auth.admin.username,
+        font_option_id=font_option_id,
+    )
+    return FontExplanationCacheResponse(
+        font_option_id=font_option_id,
+        explanation=cached.explanation,
+        updated_at=as_utc(cached.updated_at),
+    )
+
+
 
 
 @router.get("/admin/statistics", response_model=QuestionStats)

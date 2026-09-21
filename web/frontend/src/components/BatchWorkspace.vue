@@ -5,6 +5,7 @@ import { ElMessageBox } from 'element-plus';
 import { api, ApiError } from '@/api/client';
 import type { OptionGroup } from '@/types';
 import BatchCropCanvas from '@/components/BatchCropCanvas.vue';
+import { useFontExplanationCache } from '@/composables/useFontExplanationCache';
 import { addPage, cropImage, decodeImage, deleteDraft, invalidateRegion, isFrozen, listDrafts, readImage, regionProblem, saveDraft, thumbnail,
   matchesReviewFilter, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
 
@@ -24,7 +25,7 @@ const pauseRequested = ref(false);
 const submitProgress = ref('');
 const search = ref('');
 const source = ref('');
-const explanationSuggestion = ref('');
+const { suggestion: explanationSuggestion, load: loadExplanationCache, input: saveExplanationCache, flush: flushExplanationCache } = useFontExplanationCache();
 const review = ref(false);
 const reviewFilter = ref<BatchReviewFilter>('all');
 const selectedForSubmit = ref<string[]>([]);
@@ -220,29 +221,21 @@ function changeRegion(id: string, rect: Rect) {
   Object.assign(region, rect); invalidateRegion(region); void persist();
 }
 function editRegion() { if (currentRegion.value) invalidateRegion(currentRegion.value); }
-function previousExplanation(region: BatchRegion): string {
-  if (!region.form.correctOptionId) return '';
-  const currentIndex = entries.value.findIndex(({ region: item }) => item.id === region.id);
-  for (let index = currentIndex - 1; index >= 0; index--) {
-    const previous = entries.value[index].region;
-    if (previous.form.correctOptionId === region.form.correctOptionId && previous.form.explanation.trim()) return previous.form.explanation.trim();
-  }
-  return '';
-}
-function refreshExplanationSuggestion(): void {
+async function refreshExplanationSuggestion(): Promise<void> {
   const region = currentRegion.value;
-  explanationSuggestion.value = region && !region.form.explanation.trim() ? previousExplanation(region) : '';
+  await loadExplanationCache(region?.form.correctOptionId ?? '', () => currentRegion.value?.form.explanation ?? '');
 }
 function fontSelected(optionId: string): void {
   const region = currentRegion.value;
   if (!region || isFrozen(region)) return;
   region.form.correctOptionId = optionId;
   editRegion();
-  refreshExplanationSuggestion();
+  void refreshExplanationSuggestion();
   void persist();
 }
 function explanationInput(): void {
-  if (currentRegion.value?.form.explanation.trim()) explanationSuggestion.value = '';
+  const region = currentRegion.value;
+  if (region) saveExplanationCache(region.form.correctOptionId, region.form.explanation);
 }
 function acceptExplanationSuggestion(event: KeyboardEvent): void {
   const region = currentRegion.value;
@@ -253,9 +246,10 @@ function acceptExplanationSuggestion(event: KeyboardEvent): void {
   editRegion();
   void persist();
 }
-watch(() => [currentRegion.value?.id, currentRegion.value?.form.correctOptionId], refreshExplanationSuggestion, { immediate: true });
+watch(() => [currentRegion.value?.id, currentRegion.value?.form.correctOptionId], () => { void refreshExplanationSuggestion(); }, { immediate: true });
 function previewGroups(region: BatchRegion): OptionGroup[] {
   return groups.value.map((group) => ({ ...group, options: group.options.filter((option) => option.minimumDifficulty <= region.form.difficulty) })).filter((group) => group.options.length);
+  saveExplanationCache(region.form.correctOptionId, region.form.explanation);
 }
 async function completeRegion() {
   const region = currentRegion.value; const page = currentPage.value;
@@ -270,6 +264,7 @@ async function completeRegion() {
     if (await persist()) { draft.value!.regionId = ''; mobilePanel.value = 'canvas'; await nextTick(); canvas.value?.focusCanvas(); }
   } catch (caught) { region.error = message(caught); }
   finally { processing.value = false; }
+    flushExplanationCache();
 }
 function leaveForLater() { if (draft.value) { draft.value.regionId = ''; mobilePanel.value = 'canvas'; void persist(); canvas.value?.focusCanvas(); } }
 function deleteRegion() {
@@ -308,6 +303,7 @@ async function submit() {
     const session = await api.getAdminSession();
     if (session.username !== props.username) throw new Error('管理员账号已改变，请返回批次列表并重新登录原账号');
     const selected = candidates.value.filter(({ region }) => selectedForSubmit.value.includes(region.id));
+  flushExplanationCache();
     for (const [index, { page, region }] of selected.entries()) {
       if (pauseRequested.value) break;
       submitProgress.value = `正在提交 ${index + 1} / ${selected.length}`;
