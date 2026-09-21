@@ -178,6 +178,13 @@ class ImageUploadResponse(ApiModel):
     image_url: str
 
 
+class FeedbackResponse(ApiModel):
+    """Receipt returned after a feedback record is safely persisted."""
+
+    id: int
+    email_status: Literal["sent", "disabled", "failed"]
+
+
 class FontReferenceWrite(ApiModel):
     """One administrator-maintained public font comparison card."""
 

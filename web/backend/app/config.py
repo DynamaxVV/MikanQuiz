@@ -25,6 +25,9 @@ class AppSettings:
         access_log_backup_count: Number of rotated key-access files to retain.
         font_source_origins: Additional HTTPS origins allowed for imported fonts.
         config_max_bytes: Maximum request body accepted by config import endpoints.
+        feedback_smtp_*: Optional SMTP settings used for feedback notifications.
+        feedback_email_to: Comma-separated feedback notification recipients.
+        feedback_rate_limit_per_hour: Maximum feedback submissions per client per hour.
     """
 
     database_url: str = "sqlite:///./var/quiz.db"
@@ -44,6 +47,14 @@ class AppSettings:
     access_log_backup_count: int = 14
     font_source_origins: tuple[str, ...] = ()
     config_max_bytes: int = 10 * 1024 * 1024
+    feedback_smtp_host: str = ""
+    feedback_smtp_port: int = 587
+    feedback_smtp_username: str = ""
+    feedback_smtp_password: str = ""
+    feedback_smtp_starttls: bool = True
+    feedback_email_from: str = ""
+    feedback_email_to: str = ""
+    feedback_rate_limit_per_hour: int = 5
 
 
 def _parse_log_int(value: str, default: int, minimum: int) -> int:
@@ -107,6 +118,14 @@ def load_settings(env_file: Path | None = None) -> AppSettings:
         access_log_backup_count=access_log_backup_count,
         font_source_origins=font_source_origins,
         config_max_bytes=config_max_bytes,
+        feedback_smtp_host=get("QUIZ_FEEDBACK_SMTP_HOST").strip(),
+        feedback_smtp_port=_parse_log_int(get("QUIZ_FEEDBACK_SMTP_PORT", "587"), 587, 1),
+        feedback_smtp_username=get("QUIZ_FEEDBACK_SMTP_USERNAME").strip(),
+        feedback_smtp_password=get("QUIZ_FEEDBACK_SMTP_PASSWORD"),
+        feedback_smtp_starttls=get("QUIZ_FEEDBACK_SMTP_STARTTLS", "true").lower() not in {"0", "false", "no"},
+        feedback_email_from=get("QUIZ_FEEDBACK_EMAIL_FROM").strip(),
+        feedback_email_to=get("QUIZ_FEEDBACK_EMAIL_TO").strip(),
+        feedback_rate_limit_per_hour=_parse_log_int(get("QUIZ_FEEDBACK_RATE_LIMIT_PER_HOUR", "5"), 5, 1),
     )
 
 

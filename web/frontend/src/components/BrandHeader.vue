@@ -2,8 +2,10 @@
 import { nextTick, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '@/api/client';
+import FeedbackDialog from '@/components/FeedbackDialog.vue';
+import type { FeedbackContext } from '@/types';
 
-withDefaults(defineProps<{ showBrand?: boolean }>(), { showBrand: true });
+withDefaults(defineProps<{ showBrand?: boolean; showFeedback?: boolean; feedbackSource?: string; feedbackContext?: FeedbackContext }>(), { showBrand: true, showFeedback: false, feedbackSource: 'unknown' });
 
 const router = useRouter();
 const displayName = ref(localStorage.getItem('hanzipen-display-name') ?? '');
@@ -47,6 +49,7 @@ watch(editing, async (open) => {
       <button class="name-button" type="button" @click="openNameEditor">
         {{ displayName || '设置昵称' }}
       </button>
+      <FeedbackDialog v-if="showFeedback" :source="feedbackSource" :context="feedbackContext" />
       <button class="admin-button" type="button" @click="goToAdmin">管理员登录</button>
     </div>
   </header>

@@ -150,7 +150,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
 <template>
   <main class="quiz-page">
     <div class="content">
-      <BrandHeader />
+      <BrandHeader show-feedback feedback-source="quiz" />
       <div v-if="loading" class="loading-card card">正在恢复本次练习…</div>
       <ErrorPanel v-else-if="error && !attempt" :message="error" @retry="loadAttempt" />
       <section v-else-if="attempt && currentQuestion" aria-labelledby="quiz-title">

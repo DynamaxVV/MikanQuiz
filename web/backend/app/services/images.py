@@ -40,6 +40,9 @@ def upload_image(settings: AppSettings, content: bytes, content_type: str, prefi
     with NamedTemporaryFile(suffix=suffix) as image:
         image.write(content)
         image.flush()
+        if prefix:
+            key = f"{prefix.strip('/')}/{_random_key()}{suffix}"
+            return run_uploader(settings, image.name, content_type, key=key)
         return run_uploader(settings, image.name, content_type)
 
 

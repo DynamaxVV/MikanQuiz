@@ -5,6 +5,7 @@ import AnswerOption from '@/components/AnswerOption.vue';
 import BrandHeader from '@/components/BrandHeader.vue';
 import QuestionMedia from '@/components/QuestionMedia.vue';
 import type { SubmissionResult } from '@/types';
+import type { FeedbackContext } from '@/types';
 
 const route = useRoute();
 const raw = sessionStorage.getItem(`hanzipen-result-${route.params.attempt}`);
@@ -12,11 +13,17 @@ const result = ref<SubmissionResult | null>(raw ? JSON.parse(raw) as SubmissionR
 const reviewIndex = ref(0);
 const currentWrong = computed(() => result.value?.wrongAnswers[reviewIndex.value] ?? null);
 const modeLabel = computed(() => ({ beginner: '新手级', proficient: '熟练级', challenge: '挑战级' }[result.value?.mode ?? 'beginner']));
+const feedbackContext = computed<FeedbackContext>(() => result.value ? {
+  mode: result.value.mode,
+  score: result.value.score,
+  totalCount: result.value.totalCount,
+  submissionId: result.value.submissionId,
+} : {});
 </script>
 
 <template>
   <main class="result-page">
-    <div class="content"><BrandHeader />
+    <div class="content"><BrandHeader show-feedback feedback-source="result" :feedback-context="feedbackContext" />
       <section v-if="result" class="result-layout" aria-labelledby="result-title">
         <aside class="score-panel card">
           <p class="eyebrow">已完成</p>

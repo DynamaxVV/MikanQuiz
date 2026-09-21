@@ -8,7 +8,7 @@ from time import perf_counter
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Cookie, Depends, File, Header, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Cookie, Depends, File, Form, Header, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from app.config import AppSettings
 from app.database import get_session
 from app.errors import ApiError
 from app.logging import log_event
-from app.models import Admin, AdminSession, FontOption, FontReference, FontReferenceSection, Question, Submission, as_utc, utc_now
+from app.models import Admin, AdminSession, Feedback, FeedbackAttachment, FontOption, FontReference, FontReferenceSection, Question, Submission, as_utc, utc_now
 from app.schemas import (
     AdminCredentials,
     AdminSessionResponse,
@@ -32,6 +32,7 @@ from app.schemas import (
     FontReferenceCatalogUpdate,
     FontReferenceResponse,
     FontReferenceSectionResponse,
+    FeedbackResponse,
     OptionCatalogUpdate,
     FontReferenceWrite,
     OptionGroupResponse,
@@ -55,6 +56,7 @@ from app.schemas import (
 from app.services import admin as admin_service
 from app.services import config_transfer
 from app.services import images as image_service
+from app.services import feedback as feedback_service
 from app.services import questions as question_service
 from app.services import quiz as quiz_service
 from app.services import sync as sync_service

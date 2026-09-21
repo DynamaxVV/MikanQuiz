@@ -37,6 +37,14 @@ python -m pytest web/backend/tests -q
 | `QUIZ_ACCESS_LOG_PATH` | 空 | 关键访问/审计事件 JSONL 文件；生产建议 `/srv/quiz/data/quiz-access.jsonl` |
 | `QUIZ_ACCESS_LOG_MAX_BYTES` | `20971520` | 当前文件达到 20 MiB 后轮转 |
 | `QUIZ_ACCESS_LOG_BACKUP_COUNT` | `14` | 额外保留 14 个轮转文件 |
+| `QUIZ_FEEDBACK_SMTP_HOST` | 空 | 反馈通知 SMTP 主机；留空则只保存反馈 |
+| `QUIZ_FEEDBACK_SMTP_PORT` | `587` | 反馈通知 SMTP 端口 |
+| `QUIZ_FEEDBACK_SMTP_USERNAME` | 空 | SMTP 登录账号 |
+| `QUIZ_FEEDBACK_SMTP_PASSWORD` | 空 | SMTP 登录密码；不要提交到仓库 |
+| `QUIZ_FEEDBACK_SMTP_STARTTLS` | `true` | 是否在 SMTP 连接上启用 STARTTLS |
+| `QUIZ_FEEDBACK_EMAIL_FROM` | 空 | 反馈通知发件地址；为空时使用 SMTP 账号 |
+| `QUIZ_FEEDBACK_EMAIL_TO` | 空 | 反馈通知收件地址，多个地址用逗号分隔 |
+| `QUIZ_FEEDBACK_RATE_LIMIT_PER_HOUR` | `5` | 同一客户端每小时最多提交的反馈数 |
 
 ## API 合约
 
@@ -226,6 +234,10 @@ Web 登录只返回：
 复制 `.env.example` 为 `.env` 后填写上述四个值。启动时默认读取该文件；环境变量优先，可使用 `QUIZ_ENV_FILE` 指向服务器上权限为 `0600` 的配置文件。
 
 本地模式的上传目录为 `QUIZ_LOCAL_STORAGE_PATH`，路径会被后端挂载到 `QUIZ_LOCAL_PUBLIC_BASE_URL` 的 URL 路径。生产环境继续使用 R2，不要把本地模式的上传目录暴露到公网。
+
+### 用户反馈
+
+`POST /api/v1/feedback` 接受匿名反馈，正文最多 2000 字，可选填写联系 QQ 号，并支持最多 3 张 JPG、PNG 或 WebP 图片，每张不超过 3MB。图片使用独立的 `feedback/` 前缀保存；邮件通知正文包含反馈内容、联系 QQ 号、答题摘要和图片 URL，不直接发送图片附件。SMTP 未配置或投递失败时，反馈记录仍会保存在数据库中。
 
 ## 运维边界
 

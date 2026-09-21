@@ -13,7 +13,7 @@ function beginQuiz(): void {
 <template>
   <main class="home-page">
     <div class="content">
-      <BrandHeader :show-brand="false" />
+      <BrandHeader :show-brand="false" show-feedback feedback-source="home" />
       <section class="hero" aria-labelledby="home-title">
         <div class="hero-main">
           <div class="hero-copy">

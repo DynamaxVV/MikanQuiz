@@ -85,6 +85,18 @@ export interface SubmissionDetail extends SubmissionSummary {
   answers: WrongAnswer[];
 }
 
+export interface FeedbackContext {
+  mode?: DifficultyMode;
+  score?: number;
+  totalCount?: number;
+  submissionId?: string;
+}
+
+export interface FeedbackReceipt {
+  id: number;
+  emailStatus: 'sent' | 'disabled' | 'failed';
+}
+
 export interface AdminSession {
   username: string;
   expiresAt: string;

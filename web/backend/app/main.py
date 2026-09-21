@@ -18,6 +18,7 @@ from app.database import Database
 from app.errors import ApiError, api_error_handler, validation_error_handler
 from app.logging import bind_context, configure_logging, log_event, reset_context
 from app.schemas import HealthResponse
+from app.services.feedback import FeedbackRateLimiter, MAX_REQUEST_BODY_BYTES
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -32,6 +33,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app = FastAPI(title="砂糖字形课堂 API", version="1.0.5", docs_url="/api/docs")
     app.state.database = Database(settings.database_url)
     app.state.settings = settings
+    app.state.feedback_rate_limiter = FeedbackRateLimiter(settings.feedback_rate_limit_per_hour)
     if settings.storage_backend == "local":
         local_url = urlparse(settings.local_public_base_url)
         Path(settings.local_storage_path).mkdir(parents=True, exist_ok=True)
@@ -45,7 +47,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(router)
-    app.add_middleware(RequestBodySizeLimitMiddleware, limit=settings.config_max_bytes)
+    app.add_middleware(
+        RequestBodySizeLimitMiddleware,
+        limit=settings.config_max_bytes,
+        feedback_limit=MAX_REQUEST_BODY_BYTES,
+    )
     add_request_logging(app)
     add_health_route(app)
     return app
@@ -54,27 +60,28 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 class RequestBodySizeLimitMiddleware:
     """Bound config-import bodies before FastAPI parses JSON or Pydantic models."""
 
-    def __init__(self, app: ASGIApp, limit: int) -> None:
+    def __init__(self, app: ASGIApp, limit: int, feedback_limit: int) -> None:
         self.app = app
         self.limit = limit
+        self.feedback_limit = feedback_limit
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
-        if (
-            scope.get("type") != "http"
-            or scope.get("method") != "POST"
-            or path not in {
-                "/api/v1/admin/config/import",
-                "/api/v1/admin/config/import/validate",
-            }
-        ):
+        if scope.get("type") != "http" or scope.get("method") != "POST":
+            await self.app(scope, receive, send)
+            return
+        if path in {"/api/v1/admin/config/import", "/api/v1/admin/config/import/validate"}:
+            limit = self.limit
+        elif path == "/api/v1/feedback":
+            limit = self.feedback_limit
+        else:
             await self.app(scope, receive, send)
             return
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         declared = headers.get(b"content-length")
         if declared:
             try:
-                if int(declared) > self.limit:
+                if int(declared) > limit:
                     await self._reject(send)
                     return
             except ValueError:
@@ -88,7 +95,7 @@ class RequestBodySizeLimitMiddleware:
                 return
             body = message.get("body", b"")
             total += len(body)
-            if total > self.limit:
+            if total > limit:
                 await self._reject(send)
                 return
             chunks.append(body)

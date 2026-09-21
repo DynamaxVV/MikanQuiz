@@ -224,6 +224,37 @@ class SubmissionAnswer(Base):
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
+class Feedback(Base):
+    """A public user report retained independently from email delivery."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    nickname: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    contact_qq: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    client_url: Mapped[str] = mapped_column(String(2048), nullable=False, default="")
+    context: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    email_status: Mapped[str] = mapped_column(String(16), nullable=False, default="disabled")
+    email_error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class FeedbackAttachment(Base):
+    """One user-selected image belonging to a feedback record."""
+
+    __tablename__ = "feedback_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    feedback_id: Mapped[int] = mapped_column(ForeignKey("feedback.id", ondelete="CASCADE"), nullable=False)
+    image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class SyncOutbox(Base):
     """Durable, retryable publication work for derived R2 JSON documents."""
 

@@ -18,6 +18,8 @@ import type {
   WrongAnswer,
   ConfigImportPreview,
   ConfigImportResult,
+  FeedbackContext,
+  FeedbackReceipt,
 } from '@/types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '/api/v1').replace(/\/+$/, '');
@@ -119,6 +121,8 @@ interface RawFontReferenceSection {
   sort_order: number;
   cards: RawFontReference[];
 }
+
+interface RawFeedbackReceipt { id: number; email_status: FeedbackReceipt['emailStatus']; }
 
 interface RawPage<T> {
   items: T[];
@@ -316,6 +320,25 @@ export const api = {
 
   listFontReferences: async (): Promise<FontReferenceSection[]> =>
     (await request<RawFontReferenceSection[]>('/font-references')).map(mapSection),
+
+  submitFeedback: async (payload: {
+    message: string;
+    contactQq: string;
+    source: string;
+    clientUrl: string;
+    context: FeedbackContext;
+    images: File[];
+  }): Promise<FeedbackReceipt> => {
+    const form = new FormData();
+    form.set('message', payload.message);
+    form.set('contact_qq', payload.contactQq);
+    form.set('source', payload.source);
+    form.set('client_url', payload.clientUrl);
+    form.set('context', JSON.stringify(payload.context));
+    payload.images.forEach((image) => form.append('images', image));
+    const raw = await request<RawFeedbackReceipt>('/feedback', { method: 'POST', body: form });
+    return { id: raw.id, emailStatus: raw.email_status };
+  },
 
   createAttempt: async (mode: DifficultyMode): Promise<QuizAttempt> => {
     const raw = await request<RawAttempt>('/quiz/attempts', { method: 'POST', body: JSON.stringify({ mode }) });
