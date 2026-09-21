@@ -215,6 +215,42 @@ def question_stats(session: Session) -> dict:
     return {"total": total, "by_difficulty": by_difficulty, "by_font": by_font}
 
 
+def option_catalog_affects_question_projection(
+    session: Session, payload: OptionCatalogUpdate
+) -> bool:
+    """Return whether a catalogue update changes serialized question answers."""
+    existing_groups = {item.id: item for item in option_groups(session)}
+    existing_options = {
+        item.id: item for item in session.scalars(select(FontOption)).all()
+    }
+    incoming_option_ids = {
+        item.id
+        for group in payload.groups
+        for item in group.options
+        if item.id is not None
+    }
+
+    # Removing an option can null out correct_option_id on existing questions.
+    if set(existing_options) - incoming_option_ids:
+        return True
+
+    for group_data in payload.groups:
+        group = existing_groups.get(group_data.id) if group_data.id else None
+        if group is not None and group.name != group_data.name.strip():
+            return True
+        for option_data in group_data.options:
+            option = (
+                existing_options.get(option_data.id)
+                if option_data.id is not None
+                else None
+            )
+            if option is None:
+                continue
+            if option.name != option_data.name.strip() or option.group_id != group_data.id:
+                return True
+    return False
+
+
 def replace_option_catalog(session: Session, payload: OptionCatalogUpdate) -> list[OptionGroup]:
     """Replace the catalogue and mark questions for repair when an option is removed."""
     existing_groups = {item.id: item for item in option_groups(session)}

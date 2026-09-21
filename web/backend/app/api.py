@@ -12,6 +12,7 @@ from fastapi import APIRouter, Cookie, Depends, File, Form, Header, Query, Reque
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import AppSettings
 from app.database import get_session
@@ -668,7 +669,13 @@ async def upload_admin_font(
     content_type = font.content_type or ""
     started_at = perf_counter()
     try:
-        font_url = image_service.upload_font(settings, content, content_type, font.filename or "font")
+        font_url = await run_in_threadpool(
+            image_service.upload_font,
+            settings,
+            content,
+            content_type,
+            font.filename or "font",
+        )
     except ApiError as error:
         log_event(
             "r2_font_upload_failed",
@@ -944,8 +951,12 @@ def put_option_catalog(
     session: Session = Depends(get_session),
 ) -> list[OptionGroupResponse]:
     """Save groups and options independently from draw strategy settings."""
+    affects_questions = question_service.option_catalog_affects_question_projection(
+        session, data
+    )
     question_service.replace_option_catalog(session, data)
-    sync_service.enqueue_scope(session, "questions")
+    if affects_questions:
+        sync_service.enqueue_scope(session, "questions")
     session.commit()
     log_event(
         "option_catalog_replaced",
@@ -999,8 +1010,12 @@ def import_option_catalog(
     session: Session = Depends(get_session),
 ) -> list[OptionGroupResponse]:
     """Import a font catalogue from an exported JSON file."""
+    affects_questions = question_service.option_catalog_affects_question_projection(
+        session, data
+    )
     question_service.replace_option_catalog(session, data)
-    sync_service.enqueue_scope(session, "questions")
+    if affects_questions:
+        sync_service.enqueue_scope(session, "questions")
     session.commit()
     log_event(
         "option_catalog_imported",

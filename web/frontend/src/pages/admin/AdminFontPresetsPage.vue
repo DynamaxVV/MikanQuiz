@@ -18,6 +18,8 @@ const error = ref('');
 const dragged = ref<{ group: OptionGroup; index: number } | null>(null);
 const uploadingFontFor = ref('');
 const fontUploadProgress = ref(0);
+let activeSave: Promise<void> | null = null;
+let saveQueued = false;
 
 function newOption(index: number): FontOption {
   return { id: '', name: '', fontUrl: undefined, minimumDifficulty: 1, sortOrder: index };
@@ -125,7 +127,7 @@ function onDragEnd(): void {
   dragged.value = null;
 }
 
-async function save(): Promise<void> {
+async function saveOnce(): Promise<void> {
   if (!groups.value.length || groups.value.some((group) => !group.name.trim() || group.options.some((option) => !option.name.trim()))) {
     error.value = '请填写每个分区和字体名称。';
     return;
@@ -142,6 +144,21 @@ async function save(): Promise<void> {
     markSaved();
   } catch (caught) { error.value = caught instanceof Error ? caught.message : '字体快捷项保存失败。'; }
   finally { saving.value = false; }
+}
+
+async function save(): Promise<void> {
+  if (activeSave) {
+    saveQueued = true;
+    await activeSave;
+    return;
+  }
+  activeSave = saveOnce();
+  try { await activeSave; }
+  finally { activeSave = null; }
+  if (saveQueued) {
+    saveQueued = false;
+    await save();
+  }
 }
 
 onMounted(() => { void load(); });
@@ -185,7 +202,7 @@ onMounted(() => { void load(); });
                   v-if="!option.fontUrl"
                   type="button"
                   class="font-upload-btn"
-                  :disabled="uploadingFontFor === (option.id || option.name || '__new__')"
+                  :disabled="saving || Boolean(uploadingFontFor)"
                   @click="uploadFontFile(option)"
                 >
                   {{ uploadingFontFor === (option.id || option.name || '__new__') ? '上传中…' : '上传字体' }}

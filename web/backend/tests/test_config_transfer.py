@@ -76,9 +76,17 @@ def test_question_bank_export_and_import_appends_questions(client: TestClient) -
     assert sum(item["text"] == "从题库文件追加的题目" for item in current["items"]) == 1
 
 
-def test_font_url_only_catalog_save_does_not_enqueue_question_sync(client: TestClient) -> None:
+def test_font_url_only_catalog_save_does_not_enqueue_question_sync(
+    client: TestClient, monkeypatch
+) -> None:
     """Uploading a font file must not rebuild the question projection."""
     headers, _ = configure_two_question_quiz(client)
+    hash_calls = []
+    monkeypatch.setattr(
+        sync_service,
+        "scope_state_hash",
+        lambda *_args: hash_calls.append(True) or "unexpected",
+    )
     with client.app.state.database.sessions() as session:
         before_ids = {item.id for item in session.query(SyncOutbox).all()}
 
@@ -99,7 +107,34 @@ def test_font_url_only_catalog_save_does_not_enqueue_question_sync(client: TestC
 
     with client.app.state.database.sessions() as session:
         after_ids = {item.id for item in session.query(SyncOutbox).all()}
+    assert hash_calls == []
     assert after_ids == before_ids
+
+
+def test_answer_visible_catalog_change_enqueues_question_sync(client: TestClient) -> None:
+    """Renaming a font still republishes questions that expose its answer."""
+    headers, questions = configure_two_question_quiz(client)
+    with client.app.state.database.sessions() as session:
+        before_ids = {item.id for item in session.query(SyncOutbox).all()}
+
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    option = next(
+        option
+        for group in catalog
+        for option in group["options"]
+        if option["id"] == questions[0]["correct_option_id"]
+    )
+    option["name"] = "改名后的字体"
+    response = client.put(
+        "/api/v1/admin/option-groups",
+        headers=headers,
+        json={"groups": catalog},
+    )
+    assert response.status_code == 200, response.text
+
+    with client.app.state.database.sessions() as session:
+        after_ids = {item.id for item in session.query(SyncOutbox).all()}
+    assert after_ids > before_ids
 
 
 def test_settings_config_export_and_import_preserves_questions(client: TestClient) -> None:

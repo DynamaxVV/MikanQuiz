@@ -486,6 +486,29 @@ def test_font_stream_rejects_bad_upstream_content(client: TestClient, monkeypatc
     assert response.json()["error"]["code"] == "INVALID_FONT"
 
 
+def test_admin_font_upload_offloads_blocking_storage_work(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep synchronous R2 and subprocess work out of the async request loop."""
+    headers = admin_headers(client)
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_run_in_threadpool(function, *args):
+        calls.append((function, args))
+        return "https://fonts.example.test/quiz.woff2"
+
+    monkeypatch.setattr("app.api.run_in_threadpool", fake_run_in_threadpool)
+    response = client.post(
+        "/api/v1/admin/fonts",
+        headers=headers,
+        files={"font": ("quiz.ttf", b"\x00\x01\x00\x00font", "font/ttf")},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json() == {"image_url": "https://fonts.example.test/quiz.woff2"}
+    assert len(calls) == 1
+    assert calls[0][0].__name__ == "upload_font"
+
+
 def test_deleting_font_marks_question_for_repair(client: TestClient) -> None:
     """A removed correct font leaves the question editable and blocks new attempts."""
     headers, questions = configure_two_question_quiz(client)
