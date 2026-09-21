@@ -126,6 +126,90 @@ def public_settings(session: Session = Depends(get_session)) -> SettingsResponse
     return settings_response(question_service.get_settings(session))
 
 
+@router.post("/feedback", response_model=FeedbackResponse, status_code=201)
+async def create_feedback(
+    request: Request,
+    message: str = Form(default=""),
+    contact_qq: str = Form(default=""),
+    source: str = Form(default="unknown"),
+    client_url: str = Form(default=""),
+    context: str = Form(default=""),
+    images: list[UploadFile] = File(default=[]),
+    session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
+) -> FeedbackResponse:
+    """Persist anonymous feedback and best-effort notify the configured mailbox."""
+    client_key = request.client.host if request.client else "unknown"
+    limiter = request.app.state.feedback_rate_limiter
+    if not limiter.allow(client_key or "unknown"):
+        raise ApiError(429, "FEEDBACK_RATE_LIMITED", "提交过于频繁，请稍后再试")
+    try:
+        message = feedback_service.normalize_text(message, "反馈内容", feedback_service.MAX_MESSAGE_LENGTH)
+        contact_qq = feedback_service.validate_contact_qq(contact_qq)
+        source = feedback_service.normalize_text(source, "来源页面", 32) or "unknown"
+        client_url = feedback_service.normalize_text(client_url, "页面地址", feedback_service.MAX_CLIENT_URL_LENGTH)
+        context_data = feedback_service.validate_context(context)
+    except ValueError as error:
+        raise ApiError(422, "INVALID_FEEDBACK", str(error)) from error
+    if not message:
+        raise ApiError(422, "FEEDBACK_MESSAGE_REQUIRED", "请填写反馈内容")
+    if len(images) > feedback_service.MAX_ATTACHMENTS:
+        raise ApiError(422, "TOO_MANY_FEEDBACK_IMAGES", "最多上传 3 张图片")
+
+    prepared_images: list[tuple[bytes, str]] = []
+    for image in images:
+        content_type = (image.content_type or "").lower()
+        if content_type not in feedback_service.ALLOWED_IMAGE_TYPES:
+            raise ApiError(422, "INVALID_FEEDBACK_IMAGE", "反馈图片仅支持 JPG、PNG 或 WebP")
+        content = await image.read(feedback_service.MAX_IMAGE_BYTES + 1)
+        if len(content) > feedback_service.MAX_IMAGE_BYTES:
+            raise ApiError(422, "FEEDBACK_IMAGE_TOO_LARGE", "每张反馈图片不能超过 3MB")
+        image_service.validate_image(content, content_type)
+        prepared_images.append((content, content_type))
+
+    uploaded: list[tuple[str, str, int]] = []
+    for content, content_type in prepared_images:
+        uploaded.append((image_service.upload_image(settings, content, content_type, prefix="feedback"), content_type, len(content)))
+
+    feedback = Feedback(
+        message=message,
+        contact_qq=contact_qq,
+        source=source,
+        client_url=client_url,
+        context=context_data,
+        email_status="disabled",
+    )
+    session.add(feedback)
+    session.flush()
+    attachments = [
+        FeedbackAttachment(feedback_id=feedback.id, image_url=url, content_type=content_type, size_bytes=size)
+        for url, content_type, size in uploaded
+    ]
+    session.add_all(attachments)
+    session.commit()
+
+    notification = feedback_service.FeedbackNotification(
+        feedback_id=feedback.id,
+        message=feedback.message,
+        contact_qq=feedback.contact_qq,
+        source=feedback.source,
+        client_url=feedback.client_url,
+        context=feedback.context,
+        image_urls=tuple(item.image_url for item in attachments),
+        created_at=as_utc(feedback.created_at).isoformat(),
+    )
+    try:
+        feedback.email_status = feedback_service.send_feedback_email(settings, notification)
+    except feedback_service.FeedbackEmailError as error:
+        feedback.email_status = "failed"
+        feedback.email_error = str(error)
+        log_event("feedback_email_failed", logging.WARNING, feedback_id=feedback.id)
+    else:
+        log_event("feedback_email_sent", logging.INFO, feedback_id=feedback.id, email_status=feedback.email_status)
+    session.commit()
+    return FeedbackResponse(id=feedback.id, email_status=feedback.email_status)
+
+
 @router.get("/fonts/stream")
 async def stream_font(
     url: str = Query(...),
