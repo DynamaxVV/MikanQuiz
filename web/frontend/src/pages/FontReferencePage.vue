@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import BrandHeader from '@/components/BrandHeader.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
+import ImageLightbox from '@/components/ImageLightbox.vue';
 import type { FontReference, FontReferenceSection } from '@/types';
 
 const keyword = ref('');
@@ -11,6 +12,7 @@ const loading = ref(true);
 const error = ref('');
 const starFilter = ref(new Set([1, 2, 3]));
 const selected = ref<FontReference | null>(null);
+const originalOpen = ref(false);
 
 const filteredSections = computed(() =>
   sections.value
@@ -34,10 +36,12 @@ function toggleStar(level: number): void {
   starFilter.value = next;
 }
 function openCard(card: FontReference): void { selected.value = card; }
-function closeCard(): void { selected.value = null; }
+function openOriginal(): void { if (selected.value) originalOpen.value = true; }
+function closeCard(): void { originalOpen.value = false; selected.value = null; }
 
 watch(selected, (value) => {
   document.body.style.overflow = value ? 'hidden' : '';
+  if (!value) originalOpen.value = false;
 });
 
 onBeforeUnmount(() => { document.body.style.overflow = ''; });
@@ -112,13 +116,17 @@ onMounted(loadReferences);
             <span class="card-stars" aria-label="难度 {{ selected.difficulty }} 星">{{ stars(selected.difficulty) }}</span>
           </div>
           <div class="card-body">
-            <img :src="selected.imageUrl" :alt="selected.title" />
+            <button class="original-image-trigger" type="button" :aria-label="`${selected.title}图片，双击查看原图`" @dblclick.stop="openOriginal" @keydown.enter.prevent="openOriginal">
+              <img :src="selected.imageUrl" :alt="selected.title" />
+            </button>
             <p>{{ selected.note || '暂无说明' }}</p>
           </div>
+          <p class="image-hint">双击图片查看原图，可在原图查看器中调整大小</p>
         </div>
       </div>
     </Transition>
   </Teleport>
+  <ImageLightbox v-if="selected" :open="originalOpen" :src="selected.imageUrl" :alt="selected.title" @close="originalOpen = false" />
 </template>
 
 <style scoped>
@@ -159,8 +167,11 @@ onMounted(loadReferences);
 .lightbox-card .card-head h2 { font-size: 26px; }
 .lightbox-card .card-head .card-stars { font-size: 18px; }
 .lightbox-card .card-body { padding: 24px 32px 32px; gap: 24px; }
-.lightbox-card .card-body img { width: 352px; height: auto; max-height: 55vh; object-fit: contain; border-radius: 14px; }
+.lightbox-card .card-body img { width: min(480px, 52vw); height: auto; max-height: 65vh; object-fit: contain; border-radius: 14px; }
 .lightbox-card .card-body p { font-size: 16px; white-space: pre-wrap; }
+.original-image-trigger { display: block; flex-shrink: 0; padding: 0; border: 0; border-radius: 14px; background: transparent; cursor: zoom-in; }
+.original-image-trigger:focus-visible { outline: 2px solid var(--color-action); outline-offset: 4px; }
+.image-hint { margin: -8px 32px 24px; color: var(--color-text-muted); font-size: 12px; text-align: center; }
 
 /* Transition */
 .lightbox-enter-active { transition: opacity 240ms ease-out; }
@@ -185,8 +196,9 @@ onMounted(loadReferences);
   .lightbox-card .card-head h2 { font-size: 19px; }
   .lightbox-card .card-head .card-stars { font-size: 14px; }
   .lightbox-card .card-body { flex-direction: column; padding: 14px 20px 20px; gap: 16px; }
-  .lightbox-card .card-body img { width: 100%; max-height: 40vh; }
+  .lightbox-card .card-body img { width: 100%; max-height: 48vh; }
   .lightbox-card .card-body p { font-size: 14px; }
+  .image-hint { margin: -4px 20px 18px; }
 }
 
 @media (max-width: 480px) {

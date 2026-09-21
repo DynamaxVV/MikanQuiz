@@ -60,6 +60,13 @@ export function invalidateRegion(region: BatchRegion): void {
   delete region.error;
 }
 
+export function updateDifficulty(region: BatchRegion, difficulty: number): boolean {
+  if (isFrozen(region) || ![1, 2, 3].includes(difficulty) || region.form.difficulty === difficulty) return false;
+  region.form.difficulty = difficulty;
+  invalidateRegion(region);
+  return true;
+}
+
 export function regionProblem(region: BatchRegion, options: { id: string; minimumDifficulty: number }[]): string {
   if (region.width < 1 || region.height < 1) return '请框选有效区域';
   if (!region.form.text.trim()) return '请填写题干';

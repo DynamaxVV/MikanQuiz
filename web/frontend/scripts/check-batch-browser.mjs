@@ -60,6 +60,7 @@ async function stored() {
 }
 async function waitSaved() { await page.getByText('已保存到本机', { exact: true }).waitFor(); }
 async function draw(x, y, w, h) {
+  await page.getByRole('button', { name: '框选', exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator('.canvas-viewport').evaluate(element => { element.scrollTop = 0; element.scrollLeft = 0; });
   const svg = page.locator('.canvas-viewport svg');
@@ -70,6 +71,7 @@ async function draw(x, y, w, h) {
   await page.mouse.down();
   await page.mouse.move(bounds.x + (x + w) * scale, bounds.y + (y + h) * scale, { steps: 4 });
   await page.mouse.up();
+  assert.equal(await page.getByRole('button', { name: '移动', exact: true }).getAttribute('aria-pressed'), 'true', 'Completing a region should switch back to pan mode');
 }
 async function resizeSelected(dx, dy) {
   const handle = page.locator('.handle[data-corner="se"]');
@@ -115,6 +117,8 @@ try {
   await page.locator('.page-item').nth(2).waitFor();
   await page.locator('.canvas-viewport svg').waitFor();
   await waitSaved();
+  assert.equal(await page.getByRole('button', { name: '移动', exact: true }).getAttribute('aria-pressed'), 'true', 'New browser sessions should enter image mode with pan selected');
+  assert.equal(await page.evaluate(() => localStorage.getItem('mikanquiz-batch-crop-mode')), 'draw', 'The selected canvas mode should be remembered');
   const canvasHeight = await page.locator('.canvas-viewport').evaluate(element => element.clientHeight);
   assert.ok(canvasHeight >= 650, `Tall manga canvas should reserve vertical space (got ${canvasHeight}px)`);
   assert.equal(await page.locator('.page-actions').count(), 0, 'The left page action bar should be removed');
@@ -129,6 +133,10 @@ try {
   const first = (await stored()).pages[0].regions[0];
   assert.deepEqual([first.x, first.y, first.width, first.height], [70, 50, 500, 130]);
   await page.locator('.region rect[data-region]').first().click();
+  await page.locator('.region-editor select').first().selectOption('1');
+  await waitSaved();
+  assert.equal((await stored()).pages[0].regions[0].form.difficulty, 1, 'Difficulty should change directly from two stars to one star');
+  assert.equal((await stored()).pages[0].regions[0].status, 'draft');
   await page.locator('.canvas-viewport svg').evaluate(el => el.focus({ preventScroll: true }));
   await page.keyboard.press('ArrowRight');
   await waitSaved();
@@ -161,6 +169,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: '继续上次制题', exact: true }).click();
   await page.locator('.canvas-viewport svg').waitFor();
+  assert.equal(await page.getByRole('button', { name: '移动', exact: true }).getAttribute('aria-pressed'), 'true', 'Reload should restore the remembered canvas mode');
   assert.equal((await stored()).pages[0].regions.length, 3);
   const cropSize = await page.evaluate(async () => {
     const m = await import('/src/lib/batchDrafts.ts');

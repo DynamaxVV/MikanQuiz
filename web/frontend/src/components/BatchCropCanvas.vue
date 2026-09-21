@@ -4,16 +4,29 @@ import { isFrozen, rectFromPoints, type BatchPage, type BatchRegion, type Rect }
 
 const props = defineProps<{ page: BatchPage; source: string; selected: string; disabled: boolean }>();
 const emit = defineEmits<{ select: [id: string]; create: [rect: Rect]; change: [id: string, rect: Rect] }>();
+type CanvasMode = 'draw' | 'pan';
+const MODE_STORAGE_KEY = 'mikanquiz-batch-crop-mode';
 const viewport = ref<HTMLDivElement>();
 const svg = ref<SVGSVGElement>();
 const scale = ref(1);
-const mode = ref<'draw' | 'pan'>('draw');
+function readMode(): CanvasMode {
+  try {
+    const saved = localStorage.getItem(MODE_STORAGE_KEY);
+    return saved === 'draw' || saved === 'pan' ? saved : 'pan';
+  } catch {
+    return 'pan';
+  }
+}
+const mode = ref<CanvasMode>(readMode());
 const space = ref(false);
 const drawing = ref<Rect>();
 const moving = ref<{ id: string; rect: Rect }>();
 let drag: { kind: 'draw' | 'move' | 'resize' | 'pan'; start: { x: number; y: number }; region?: BatchRegion; corner?: string; left: number; top: number } | undefined;
 const corners = ['nw', 'ne', 'sw', 'se'];
 const selectedRegion = computed(() => props.page.regions.find((region) => region.id === props.selected));
+watch(mode, (value) => {
+  try { localStorage.setItem(MODE_STORAGE_KEY, value); } catch { /* local storage may be unavailable */ }
+});
 function displayed(region: BatchRegion): Rect { return moving.value?.id === region.id ? moving.value.rect : region; }
 function point(event: PointerEvent) {
   const box = svg.value!.getBoundingClientRect();
@@ -60,7 +73,10 @@ function move(event: PointerEvent) {
   }
 }
 function finish() {
-  if (drawing.value && drawing.value.width >= 4 && drawing.value.height >= 4) emit('create', drawing.value);
+  if (drawing.value && drawing.value.width >= 4 && drawing.value.height >= 4) {
+    mode.value = 'pan';
+    emit('create', drawing.value);
+  }
   if (moving.value && moving.value.rect.width >= 1 && moving.value.rect.height >= 1) emit('change', moving.value.id, moving.value.rect);
   cancel();
 }

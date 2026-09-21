@@ -421,8 +421,8 @@ export const api = {
     return { previousId: raw.previous_id ? String(raw.previous_id) : undefined, nextId: raw.next_id ? String(raw.next_id) : undefined, position: raw.position, total: raw.total };
   },
 
-  createQuestion: async (question: QuestionPayload): Promise<Question> =>
-    mapQuestion(await request<RawQuestion>('/admin/questions', { method: 'POST', body: JSON.stringify(toQuestionWrite(question)) })),
+  createQuestion: async (question: QuestionPayload, clientRequestId?: string): Promise<Question> =>
+    mapQuestion(await request<RawQuestion>('/admin/questions', { method: 'POST', body: JSON.stringify({ ...toQuestionWrite(question), ...(clientRequestId ? { client_request_id: clientRequestId } : {}) }) })),
 
   updateQuestion: async (id: string, question: QuestionPayload): Promise<Question> =>
     mapQuestion(await request<RawQuestion>(`/admin/questions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(toQuestionWrite(question)) })),

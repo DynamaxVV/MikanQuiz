@@ -7,7 +7,7 @@ import type { OptionGroup } from '@/types';
 import BatchCropCanvas from '@/components/BatchCropCanvas.vue';
 import { useFontExplanationCache } from '@/composables/useFontExplanationCache';
 import { addPage, cropImage, decodeImage, deleteDraft, invalidateRegion, isFrozen, listDrafts, readImage, regionProblem, saveDraft, thumbnail,
-  matchesReviewFilter, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
+  matchesReviewFilter, updateDifficulty, type BatchDraft, type BatchPage, type BatchRegion, type BatchReviewFilter, type Rect } from '@/lib/batchDrafts';
 
 const props = defineProps<{ username: string }>();
 const draft = ref<BatchDraft>();
@@ -233,6 +233,12 @@ function fontSelected(optionId: string): void {
   void refreshExplanationSuggestion();
   void persist();
 }
+function difficultyChanged(event: Event): void {
+  const region = currentRegion.value;
+  if (!region || isFrozen(region) || busy.value) return;
+  const value = Number((event.currentTarget as HTMLSelectElement).value);
+  if (updateDifficulty(region, value)) void persist();
+}
 function explanationInput(): void {
   const region = currentRegion.value;
   if (region) saveExplanationCache(region.form.correctOptionId, region.form.explanation);
@@ -416,7 +422,7 @@ onBeforeUnmount(() => {
             <header class="editor-heading"><span class="eyebrow">当前题目</span><h2>区域 {{ currentPage.regions.indexOf(currentRegion) + 1 }}</h2></header>
             <div class="editor-scroll">
               <fieldset :disabled="frozen || busy" @input="editRegion" @change="editRegion">
-                <label class="field">难度<select v-model.number="currentRegion.form.difficulty"><option v-for="star in 3" :key="star" :value="star">{{ '★'.repeat(star) }}</option></select></label>
+                <label class="field">难度<select :value="currentRegion.form.difficulty" @change.stop="difficultyChanged"><option v-for="star in 3" :key="star" :value="star">{{ '★'.repeat(star) }}</option></select></label>
                 <div class="field"><span>正确字体 <strong v-if="currentRegion.form.correctOptionId">· {{ fontName(currentRegion.form.correctOptionId) }}</strong></span><input v-model="search" type="search" placeholder="搜索字体名称" aria-label="搜索字体名称" @input.stop @change.stop /></div>
                 <div class="font-groups"><section v-for="group in filteredGroups" :key="group.id"><h3>{{ group.name }}</h3><div class="font-options"><label v-for="option in group.options" :key="option.id" :class="{ chosen: currentRegion.form.correctOptionId === option.id, locked: option.minimumDifficulty > currentRegion.form.difficulty }"><input v-model="currentRegion.form.correctOptionId" type="radio" name="batch-font" :value="option.id" :disabled="option.minimumDifficulty > currentRegion.form.difficulty" @change="fontSelected(option.id)" />{{ option.name }}<small v-if="option.minimumDifficulty > currentRegion.form.difficulty">{{ option.minimumDifficulty }}★起</small></label></div></section><p v-if="!filteredGroups.length" class="muted">没有匹配的字体</p></div>
                 <label class="field"><span>解析</span><textarea v-model="currentRegion.form.explanation" maxlength="1000" rows="4" :placeholder="explanationSuggestion || '写下判别依据或补充说明'" @input="explanationInput" @keydown.tab="acceptExplanationSuggestion" /><small v-if="explanationSuggestion" class="explanation-suggestion" role="status">已有同字体解析，按 <kbd>Tab</kbd> 采用</small></label>
