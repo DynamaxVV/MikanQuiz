@@ -153,7 +153,7 @@ export interface ConfigDiff {
 export interface ConfigImportPreview {
   currentHash: string;
   incomingHash: string;
-  mode: 'replace';
+  mode: 'replace' | 'settings';
   diff: ConfigDiff;
   warnings: string[];
   canImport: boolean;
@@ -162,7 +162,7 @@ export interface ConfigImportPreview {
 export interface ConfigImportResult {
   currentHash: string;
   importedHash: string;
-  mode: 'replace';
+  mode: 'replace' | 'settings';
   diff: ConfigDiff;
   warnings: string[];
 }

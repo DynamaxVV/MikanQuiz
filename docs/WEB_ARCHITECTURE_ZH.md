@@ -203,14 +203,15 @@ python -m app.admin_cli enable USERNAME
 
 提交记录永久保留，管理 API 必须分页，不允许无上限返回全部记录。
 
-### 7.6 完整配置传输
+### 7.6 完整与设置配置传输
 
-管理配置采用一个 versioned manifest，而不是依赖本机整数 ID：
+管理配置采用一个 versioned manifest，而不是依赖本机整数 ID。manifest 通过 `scope` 区分完整配置和设置配置：
 
 ```json
 {
   "format": "mikanquiz-admin-config",
   "version": 1,
+  "scope": "full",
   "exported_at": "...",
   "option_catalog": {"groups": [...]},
   "questions": [...],
@@ -221,7 +222,7 @@ python -m app.admin_cli enable USERNAME
 
 分区、字体、题目、笔记分区和笔记卡片均带持久化 `config_key`；题目通过 `correct_option_key` 引用字体。`exported_at` 仅用于传输展示，canonical projection 会移除它，再以 `ensure_ascii=false`、`sort_keys=true`、紧凑分隔符和 UTF-8 SHA-256 生成预览哈希。数据库整数 ID、时间戳和管理员凭据不进入该文件。
 
-导入采用“预览 → hash-bound 确认 → replace”流程，只替换题库、字体目录、策略和嵌字笔记，不替换管理员、会话、attempt、提交历史，也不删除 R2 原始图片/字体。服务端在 `BEGIN IMMEDIATE` 中重新校验文件、重算当前哈希并检查活动 attempt；删除题目仍被未提交且未过期 attempt 引用时，整个导入返回 `ACTIVE_ATTEMPT_CONFLICT`。字体 URL 仅允许当前 R2 公共地址或 `QUIZ_FONT_SOURCE_ORIGINS` 中的 HTTPS origin，manifest 自身不能声明新信任来源。
+完整配置导入采用“预览 → hash-bound 确认 → replace”流程，替换题库、字体目录、策略和嵌字笔记；设置配置将 `scope` 设为 `settings`、不携带题目数据，采用 `mode: "settings"`，只更新字体目录、策略和嵌字笔记并保留当前题库。两种模式都不替换管理员、会话、attempt、提交历史，也不删除 R2 原始图片/字体。服务端在 `BEGIN IMMEDIATE` 中重新校验文件并重算当前哈希；完整配置还会检查活动 attempt，删除题目仍被未提交且未过期 attempt 引用时，整个导入返回 `ACTIVE_ATTEMPT_CONFLICT`。字体 URL 仅允许当前 R2 公共地址或 `QUIZ_FONT_SOURCE_ORIGINS` 中的 HTTPS origin，manifest 自身不能声明新信任来源。
 
 导入提交后只在 `sync_outbox` 写入 `questions`/`notes` scope 任务。worker 短事务 claim、租约与 scope fence、网络发布、CAS 完成；每个 scope 单飞，失败按 1/5/30/300 秒退避，最多 10 次。任务会重建现有实体文件和全量快照，并携带删除 tombstone；租约丢失后，即使旧 worker 已写入对象，也会无条件重新排队当前 hash，避免晚到写覆盖新版本。
 
@@ -277,6 +278,7 @@ PUT    /api/v1/admin/settings/font-presets
 GET    /api/v1/admin/submissions?page=&display_name=&from=&to=
 GET    /api/v1/admin/submissions/{id}
 GET    /api/v1/admin/config/export
+GET    /api/v1/admin/config/export?scope=settings
 POST   /api/v1/admin/config/import/validate
 POST   /api/v1/admin/config/import
 GET    /api/v1/admin/questions/export
@@ -384,8 +386,8 @@ npm --prefix web/frontend run build
 - Web：首页 → 选难度 → 答完 → 提交 → 查看错题 → 再答一次。
 - Web：刷新后恢复 24 小时内未完成 attempt；已提交 attempt 不重复写记录。
 - Web：管理员登录、题目 CRUD、策略、字体快捷项、分页提交记录。
-- Web：管理员导出完整 JSON，选择文件后预览 hash/差异，并在明确确认后替换配置。
-- Web：管理员在同一配置迁移页导出题库 JSON，选择题库文件追加导入，并查看成功/失败统计。
+- Web：管理员导出完整 JSON（含题库）或设置 JSON（不含题库），选择文件后按两步流程预览 hash/差异，并在明确确认后应用对应范围。
+- Web：管理员在同一配置迁移页下方的题库工具导出题库 JSON，选择题库文件追加导入，并查看成功/失败统计。
 - Sync：运行 outbox worker，验证 R2 发布失败可重试且不会阻塞 API 写入。
 - Web：嵌字笔记、图片放大、图片失败状态。
 - 小程序：同一后端上的公开答题和账号密码管理登录。

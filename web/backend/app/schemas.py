@@ -83,28 +83,6 @@ class FontExplanationCacheResponse(ApiModel):
     updated_at: datetime | None = None
 
 
-class FontExplanationCacheWrite(ApiModel):
-    """One reusable explanation draft saved for a catalogue font."""
-
-    explanation: str = Field(min_length=1, max_length=1000)
-
-    @field_validator("explanation", mode="after")
-    @classmethod
-    def strip_explanation(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("解析不能为空")
-        return value
-
-
-class FontExplanationCacheResponse(ApiModel):
-    """The cached explanation, or an empty value when none has been saved yet."""
-
-    font_option_id: int
-    explanation: str = Field(max_length=1000)
-    updated_at: datetime | None = None
-
-
 class OptionGroupResponse(ApiModel):
     id: int
     name: str
@@ -470,44 +448,45 @@ class SettingsResponse(ApiModel):
 
 
 class ConfigManifest(ApiModel):
-    """The single versioned JSON document used for full admin configuration transfer."""
+    """The versioned JSON document used for full or settings-only transfer."""
 
     format: Literal["mikanquiz-admin-config"]
     version: Literal[1]
+    scope: Literal["full", "settings"] = "full"
     exported_at: str | None = None
     option_catalog: ConfigOptionCatalog
-    questions: list[ConfigQuestion] = Field(max_length=10000)
+    questions: list[ConfigQuestion] = Field(default_factory=list, max_length=10000)
     settings: SettingsResponse
     font_references: ConfigReferences
 
 
 class ConfigImportRequest(ApiModel):
-    """Preview or commit request for a complete configuration replacement."""
+    """Preview or commit request for a complete or settings-only transfer."""
 
     manifest: ConfigManifest
-    mode: Literal["replace"] = "replace"
+    mode: Literal["replace", "settings"] = "replace"
     expected_current_hash: str | None = Field(default=None, min_length=64, max_length=64)
     expected_incoming_hash: str | None = Field(default=None, min_length=64, max_length=64)
     confirm: bool = False
 
 
 class ConfigImportPreview(ApiModel):
-    """Read-only diff and hash result shown before destructive replacement."""
+    """Read-only diff and hash result shown before applying the selected scope."""
 
     current_hash: str
     incoming_hash: str
-    mode: Literal["replace"]
+    mode: Literal["replace", "settings"]
     diff: dict[str, int]
     warnings: list[str] = Field(default_factory=list)
     can_import: bool
 
 
 class ConfigImportResult(ApiModel):
-    """Result returned after the replacement transaction and outbox enqueue."""
+    """Result returned after the transfer transaction and outbox enqueue."""
 
     current_hash: str
     imported_hash: str
-    mode: Literal["replace"]
+    mode: Literal["replace", "settings"]
     diff: dict[str, int]
     warnings: list[str] = Field(default_factory=list)
 

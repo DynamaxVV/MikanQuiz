@@ -19,7 +19,6 @@ const navItems = [
   { label: '出题策略', to: '/admin/strategy' },
   { label: '字体快捷项', to: '/admin/font-presets' },
   { label: '嵌字笔记', to: '/admin/font-references' },
-  { label: '配置迁移', to: '/admin/config' },
 ];
 const activePath = computed(() => route.path);
 

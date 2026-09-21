@@ -316,6 +316,26 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+type ConfigExportScope = 'full' | 'settings';
+
+async function downloadConfigExport(scope: ConfigExportScope): Promise<void> {
+  const query = scope === 'settings' ? '?scope=settings' : '';
+  const response = await fetch(`${API_BASE}/admin/config/export${query}`, { credentials: 'same-origin' });
+  if (!response.ok) {
+    let body: ApiErrorBody | null = null;
+    try { body = JSON.parse(await response.text()) as ApiErrorBody; } catch { /* use fallback */ }
+    const fallback = scope === 'full' ? '完整配置导出失败。' : '设置配置导出失败。';
+    const message = response.status === 404
+      ? '当前服务器未提供配置导出接口，请更新并重启后端服务。'
+      : messageFromError(body, fallback);
+    throw new ApiError(message, response.status, response.status === 404 ? 'CONFIG_EXPORT_NOT_FOUND' : codeFromError(body), body?.error?.details);
+  }
+  downloadBlob(
+    await response.blob(),
+    scope === 'full' ? 'mikanquiz-admin-config.json' : 'mikanquiz-admin-settings.json',
+  );
+}
+
 export const api = {
   getQuizSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/quiz/settings')),
 
@@ -367,31 +387,23 @@ export const api = {
 
   getAdminSession: async (): Promise<AdminSession> => sessionFrom(await request<RawSession>('/admin/session')),
 
-  exportConfig: async (): Promise<void> => {
-    const response = await fetch(`${API_BASE}/admin/config/export`, { credentials: 'same-origin' });
-    if (!response.ok) {
-      let body: ApiErrorBody | null = null;
-      try { body = JSON.parse(await response.text()) as ApiErrorBody; } catch { /* use fallback */ }
-      const message = response.status === 404
-        ? '当前服务器未提供配置导出接口，请更新并重启后端服务。'
-        : messageFromError(body, '配置导出失败。');
-      throw new ApiError(message, response.status, response.status === 404 ? 'CONFIG_EXPORT_NOT_FOUND' : codeFromError(body), body?.error?.details);
-    }
-    downloadBlob(await response.blob(), 'mikanquiz-admin-config.json');
-  },
+  exportConfig: async (): Promise<void> => downloadConfigExport('full'),
+
+  exportSettingsConfig: async (): Promise<void> => downloadConfigExport('settings'),
 
   validateConfig: async (file: File): Promise<ConfigImportPreview> => {
     const manifest = await readConfigFile(file);
-    const raw = await request<{ current_hash: string; incoming_hash: string; mode: 'replace'; diff: ConfigImportPreview['diff']; warnings: string[]; can_import: boolean }>('/admin/config/import/validate', {
-      method: 'POST', body: JSON.stringify({ manifest, mode: 'replace' }),
+    const mode = manifest.scope === 'settings' ? 'settings' : 'replace';
+    const raw = await request<{ current_hash: string; incoming_hash: string; mode: 'replace' | 'settings'; diff: ConfigImportPreview['diff']; warnings: string[]; can_import: boolean }>('/admin/config/import/validate', {
+      method: 'POST', body: JSON.stringify({ manifest, mode }),
     });
     return { currentHash: raw.current_hash, incomingHash: raw.incoming_hash, mode: raw.mode, diff: raw.diff, warnings: raw.warnings, canImport: raw.can_import };
   },
 
   importConfig: async (file: File, preview: ConfigImportPreview): Promise<ConfigImportResult> => {
     const manifest = await readConfigFile(file);
-    const raw = await request<{ current_hash: string; imported_hash: string; mode: 'replace'; diff: ConfigImportResult['diff']; warnings: string[] }>('/admin/config/import', {
-      method: 'POST', body: JSON.stringify({ manifest, mode: 'replace', expected_current_hash: preview.currentHash, expected_incoming_hash: preview.incomingHash, confirm: true }),
+    const raw = await request<{ current_hash: string; imported_hash: string; mode: 'replace' | 'settings'; diff: ConfigImportResult['diff']; warnings: string[] }>('/admin/config/import', {
+      method: 'POST', body: JSON.stringify({ manifest, mode: preview.mode, expected_current_hash: preview.currentHash, expected_incoming_hash: preview.incomingHash, confirm: true }),
     });
     return { currentHash: raw.current_hash, importedHash: raw.imported_hash, mode: raw.mode, diff: raw.diff, warnings: raw.warnings };
   },
@@ -522,6 +534,7 @@ export const api = {
   getAdminSettings: async (): Promise<QuizSettings> => mapSettings(await request<RawSettings>('/admin/settings')),
 
   getOptionGroups: async (): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups')).map(mapGroup),
+
   getFontExplanationCache: async (fontOptionId: string): Promise<string> =>
     (await request<RawFontExplanationCache>(`/admin/font-explanation-cache/${encodeURIComponent(fontOptionId)}`)).explanation,
 
@@ -530,7 +543,6 @@ export const api = {
       method: 'PUT', body: JSON.stringify({ explanation }),
     });
   },
-
 
   saveOptionGroups: async (groups: OptionGroup[]): Promise<OptionGroup[]> => (await request<RawOptionGroup[]>('/admin/option-groups', { method: 'PUT', body: JSON.stringify({ groups: groups.map((group) => ({ id: Number(group.id) || undefined, name: group.name, sort_order: group.sortOrder, options: group.options.map((option) => ({ id: Number(option.id) || undefined, name: option.name, font_url: option.fontUrl || undefined, minimum_difficulty: option.minimumDifficulty, sort_order: option.sortOrder })) })) }) })).map(mapGroup),
 

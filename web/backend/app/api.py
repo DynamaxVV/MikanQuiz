@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from time import perf_counter
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Cookie, Depends, File, Form, Header, Query, Request, Response, UploadFile
@@ -427,11 +427,12 @@ def admin_session_status(auth: AdminAuth = Depends(require_admin)) -> AdminStatu
 
 @router.get("/admin/config/export")
 def export_admin_config(
+    scope: Literal["full", "settings"] = Query(default="full"),
     auth: AdminAuth = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
-    """Export the complete editable configuration as one portable JSON document."""
-    manifest = config_transfer.export_manifest(session)
+    """Export the complete or settings-only editable configuration."""
+    manifest = config_transfer.export_manifest(session, include_questions=scope == "full")
     content = json.dumps(
         manifest.model_dump(mode="json"), ensure_ascii=False, indent=2
     ).encode("utf-8")
@@ -440,11 +441,13 @@ def export_admin_config(
         admin_username=auth.admin.username,
         question_count=len(manifest.questions),
         group_count=len(manifest.option_catalog.groups),
+        config_scope=scope,
     )
+    filename = "mikanquiz-admin-config.json" if scope == "full" else "mikanquiz-admin-settings.json"
     return Response(
         content=content,
         media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename=mikanquiz-admin-config.json"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
@@ -456,6 +459,9 @@ def validate_admin_config(
     settings: AppSettings = Depends(get_app_settings),
 ) -> ConfigImportPreview:
     """Validate a candidate manifest and calculate its replacement preview read-only."""
+    expected_mode = config_transfer.import_mode(data.manifest)
+    if data.mode != expected_mode:
+        raise ApiError(422, "CONFIG_SCOPE_MODE_MISMATCH", "配置文件范围与导入模式不一致")
     result = config_transfer.preview(session, settings, data.manifest)
     log_event(
         "config_import_validated",
@@ -472,9 +478,12 @@ def import_admin_config(
     auth: AdminAuth = Depends(require_admin),
     settings: AppSettings = Depends(get_app_settings),
 ) -> ConfigImportResult:
-    """Replace all config entities only after an explicit, hash-bound confirmation."""
+    """Apply a full replacement or settings-only update after hash-bound confirmation."""
+    expected_mode = config_transfer.import_mode(data.manifest)
+    if data.mode != expected_mode:
+        raise ApiError(422, "CONFIG_SCOPE_MODE_MISMATCH", "配置文件范围与导入模式不一致")
     if not data.confirm:
-        raise ApiError(400, "CONFIG_CONFIRMATION_REQUIRED", "请先完成预览并确认替换")
+        raise ApiError(400, "CONFIG_CONFIRMATION_REQUIRED", "请先完成预览并确认导入")
     if not data.expected_current_hash or not data.expected_incoming_hash:
         raise ApiError(400, "CONFIG_PREVIEW_REQUIRED", "请使用最新预览结果确认导入")
     incoming_hash = config_transfer.manifest_hash(data.manifest)
@@ -494,7 +503,9 @@ def import_admin_config(
         except OperationalError as error:
             raise ApiError(503, "CONFIG_WRITE_BUSY", "配置正在被其他操作写入，请稍后重试") from error
         locked = Session(bind=connection, expire_on_commit=False)
-        current = config_transfer.export_manifest(locked)
+        current = config_transfer.export_manifest(
+            locked, include_questions=data.mode == "replace"
+        )
         current_hash = config_transfer.manifest_hash(current)
         if current_hash != data.expected_current_hash:
             raise ApiError(
@@ -862,6 +873,8 @@ def get_option_catalog(
 ) -> list[OptionGroupResponse]:
     """Return the catalogue used by both the editor and public quiz snapshots."""
     return catalogue(session)
+
+
 @router.get(
     "/admin/font-explanation-cache/{font_option_id:int}",
     response_model=FontExplanationCacheResponse,
@@ -912,8 +925,6 @@ def save_admin_font_explanation_cache(
         explanation=cached.explanation,
         updated_at=as_utc(cached.updated_at),
     )
-
-
 
 
 @router.get("/admin/statistics", response_model=QuestionStats)

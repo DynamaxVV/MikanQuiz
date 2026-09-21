@@ -1,4 +1,4 @@
-"""Portable full-configuration manifests and transactional replacement logic."""
+"""Portable configuration manifests and transactional transfer logic."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ SYSTEM_GROUP_KEYS = {
 }
 
 
-def export_manifest(session: Session) -> ConfigManifest:
-    """Project all editable configuration domains into one portable manifest."""
+def export_manifest(session: Session, include_questions: bool = True) -> ConfigManifest:
+    """Project editable configuration into a full or settings-only manifest."""
     groups = session.scalars(
         select(OptionGroup).order_by(OptionGroup.sort_order, OptionGroup.config_key)
     ).all()
@@ -71,19 +71,21 @@ def export_manifest(session: Session) -> ConfigManifest:
         ]
     }
 
-    option_keys = {option.id: option.config_key for option in options}
-    questions = session.scalars(select(Question).order_by(Question.config_key)).all()
-    question_data = [
-        {
-            "config_key": question.config_key,
-            "text": question.text,
-            "image_url": question.image_url,
-            "difficulty": question.difficulty,
-            "correct_option_key": option_keys.get(question.correct_option_id),
-            "explanation": question.explanation,
-        }
-        for question in questions
-    ]
+    question_data: list[dict[str, Any]] = []
+    if include_questions:
+        option_keys = {option.id: option.config_key for option in options}
+        questions = session.scalars(select(Question).order_by(Question.config_key)).all()
+        question_data = [
+            {
+                "config_key": question.config_key,
+                "text": question.text,
+                "image_url": question.image_url,
+                "difficulty": question.difficulty,
+                "correct_option_key": option_keys.get(question.correct_option_id),
+                "explanation": question.explanation,
+            }
+            for question in questions
+        ]
 
     settings = session.get(QuizSettings, 1)
     if settings is None:
@@ -145,6 +147,7 @@ def export_manifest(session: Session) -> ConfigManifest:
         {
             "format": FORMAT,
             "version": VERSION,
+            "scope": "full" if include_questions else "settings",
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "option_catalog": option_catalog,
             "questions": question_data,
@@ -181,12 +184,13 @@ def preview(
 ) -> ConfigImportPreview:
     """Validate without writing and return stable hashes plus a human-readable diff."""
     validate_manifest(settings, manifest)
-    current = export_manifest(session)
+    include_questions = manifest.scope == "full"
+    current = export_manifest(session, include_questions=include_questions)
     warnings = manifest_warnings(manifest)
     return ConfigImportPreview(
         current_hash=manifest_hash(current),
         incoming_hash=manifest_hash(manifest),
-        mode="replace",
+        mode="replace" if include_questions else "settings",
         diff=diff_manifests(current, manifest),
         warnings=warnings,
         can_import=True,
@@ -221,6 +225,14 @@ def validate_manifest(settings: AppSettings, manifest: ConfigManifest) -> None:
                         "code": "FONT_ORIGIN_NOT_ALLOWED",
                     }
                 )
+    if manifest.scope == "settings" and manifest.questions:
+        details.append(
+            {
+                "path": "questions",
+                "message": "设置配置不应包含题库数据",
+                "code": "CONFIG_SCOPE_INVALID",
+            }
+        )
     for required in SYSTEM_GROUP_KEYS:
         if required not in {
             group.config_key for group in manifest.option_catalog.groups
@@ -291,6 +303,11 @@ def manifest_warnings(manifest: ConfigManifest) -> list[str]:
     return warnings
 
 
+def import_mode(manifest: ConfigManifest) -> str:
+    """Return the write mode implied by a manifest's declared scope."""
+    return "replace" if manifest.scope == "full" else "settings"
+
+
 def diff_manifests(current: ConfigManifest, incoming: ConfigManifest) -> dict[str, int]:
     """Count additions, removals and content changes by stable-key entity."""
     current_data = canonical_projection(current)
@@ -355,11 +372,13 @@ def replace_database(
     manifest: ConfigManifest,
     current: ConfigManifest,
 ) -> ConfigImportResult:
-    """Replace config entities in one already-exclusive transaction."""
+    """Apply a full replacement or settings-only update in one transaction."""
     validate_manifest(settings, manifest)
-    deleted_question_ids = _deleted_question_ids(session, manifest)
-    if deleted_question_ids:
-        _raise_active_attempt_conflict(session, deleted_question_ids)
+    settings_only = manifest.scope == "settings"
+    if not settings_only:
+        deleted_question_ids = _deleted_question_ids(session, manifest)
+        if deleted_question_ids:
+            _raise_active_attempt_conflict(session, deleted_question_ids)
 
     old_questions = session.scalars(select(Question)).all()
     old_sections = session.scalars(select(FontReferenceSection)).all()
@@ -369,20 +388,27 @@ def replace_database(
     old_section_keys = {section.config_key for section in old_sections}
     diff = diff_manifests(current, manifest)
     _replace_options(session, manifest)
-    _replace_questions(session, manifest)
+    if not settings_only:
+        _replace_questions(session, manifest)
     _replace_settings(session, manifest)
     _replace_references(session, manifest)
     session.flush()
 
     from app.services import sync as sync_service
 
-    sync_service.enqueue_scope(
-        session,
-        "questions",
-        removed_local_ids=old_question_ids - {item.id for item in session.scalars(select(Question)).all()},
-        removed_config_keys=old_question_keys
-        - {item.config_key for item in session.scalars(select(Question)).all()},
-    )
+    current_questions = session.scalars(select(Question)).all()
+    if settings_only:
+        # Font options can be removed or re-keyed while questions remain in place.
+        # Republish the question snapshot so a deleted answer option is visible.
+        sync_service.enqueue_scope(session, "questions")
+    else:
+        sync_service.enqueue_scope(
+            session,
+            "questions",
+            removed_local_ids=old_question_ids - {item.id for item in current_questions},
+            removed_config_keys=old_question_keys
+            - {item.config_key for item in current_questions},
+        )
     sync_service.enqueue_scope(
         session,
         "notes",
@@ -395,7 +421,7 @@ def replace_database(
     return ConfigImportResult(
         current_hash=imported_hash,
         imported_hash=imported_hash,
-        mode="replace",
+        mode=import_mode(manifest),
         diff=diff,
         warnings=manifest_warnings(manifest),
     )

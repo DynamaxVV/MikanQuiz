@@ -31,7 +31,7 @@ python -m pytest web/backend/tests -q
 | `QUIZ_DATABASE_URL` | `sqlite:///./quiz.db` | 本机 SQLite 路径；不可指向 OSS/NFS |
 | `QUIZ_ADMIN_SESSION_HOURS` | `8` | 管理员 Bearer token 有效期 |
 | `QUIZ_COOKIE_SECURE` | `true` | Web 管理 Cookie 是否只允许 HTTPS；本地测试设为 `false` |
-| `QUIZ_CONFIG_MAX_BYTES` | `10485760` | 完整配置 JSON 导入的应用层请求体上限；Nginx 样例同步为 `10m` |
+| `QUIZ_CONFIG_MAX_BYTES` | `10485760` | 完整或设置配置 JSON 导入的应用层请求体上限；Nginx 样例同步为 `10m` |
 | `QUIZ_FONT_SOURCE_ORIGINS` | 空 | 允许导入字体 URL 的额外 HTTPS origin，逗号分隔；不会读取或探测远程内容 |
 | `QUIZ_LOG_LEVEL` | `INFO` | 应用 JSON 日志级别；可选 `DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `QUIZ_ACCESS_LOG_PATH` | 空 | 关键访问/审计事件 JSONL 文件；生产建议 `/srv/quiz/data/quiz-access.jsonl` |
@@ -202,19 +202,19 @@ Web 登录只返回：
 
 公开嵌字笔记卡片使用 `GET /api/v1/font-references`，无需管理员认证。
 
-### 完整配置迁移
+### 配置迁移
 
-管理端 `/admin/config` 提供一个 `mikanquiz-admin-config.json` 文件的导出、只读预览和确认导入：
+管理端 `/admin/config` 提供完整配置和设置配置两种 JSON 文件的导出、只读预览和确认导入。页面右上角的“导出全部配置”生成 `mikanquiz-admin-config.json`，包含题库；“导出设置配置”生成不含题库的 `mikanquiz-admin-settings.json`：
 
 | Method | Path | 作用 |
 | --- | --- | --- |
-| `GET` | `/admin/config/export` | 导出题库、字体分区/字体、出题设置和嵌字笔记 |
+| `GET` | `/admin/config/export` | 默认导出题库、字体分区/字体、出题设置和嵌字笔记；`?scope=settings` 只导出设置、字体目录和嵌字笔记 |
 | `POST` | `/admin/config/import/validate` | 校验 manifest、检查字体来源并返回当前/导入 SHA-256 与差异 |
-| `POST` | `/admin/config/import` | 使用预览哈希和 `confirm: true` 原子替换配置实体 |
+| `POST` | `/admin/config/import` | 使用预览哈希和 `confirm: true` 原子应用完整替换或设置更新 |
 
-文件格式固定为 `{"format":"mikanquiz-admin-config","version":1,...}`。题目、分区、字体和笔记使用迁移稳定的 `config_key`，不保存本机整数 ID；`exported_at` 只属于传输元数据，不参与哈希。导入只支持 `mode: "replace"`，要求管理员先预览，提交 `expected_current_hash`、`expected_incoming_hash` 和显式确认。管理员账号、会话、答题 attempt、提交历史不会被替换；原始图片和字体对象也不会被删除，只会更新数据库配置和派生 JSON 同步任务。
+文件格式固定为 `{"format":"mikanquiz-admin-config","version":1,...}`，并用 `scope: "full"` 或 `scope: "settings"` 标记范围。题目、分区、字体和笔记使用迁移稳定的 `config_key`，不保存本机整数 ID；`exported_at` 只属于传输元数据，不参与哈希。完整配置使用 `mode: "replace"` 替换题库和其他配置；设置配置使用 `mode: "settings"`，只更新字体分区、出题设置和嵌字笔记，当前题库保持不变。两种导入都要求管理员先预览，提交 `expected_current_hash`、`expected_incoming_hash` 和显式确认；管理员账号、会话、答题 attempt、提交历史不会被替换，原始图片和字体对象也不会被删除，只会更新数据库配置和派生 JSON 同步任务。
 
-导入会在 SQLite `BEGIN IMMEDIATE` 下重新计算当前哈希并再次检查未提交且未过期的答题会话；如果将删除的题目仍被引用，返回 `ACTIVE_ATTEMPT_CONFLICT`，不会产生部分写入。字体 URL 必须是 HTTPS，且只能来自当前 `QUIZ_R2_PUBLIC_BASE_URL` 或 `QUIZ_FONT_SOURCE_ORIGINS`；系统保留分区不能从 manifest 中省略。错误响应中的 `details` 最多返回 200 项，并以 `errors_truncated` 标记截断。
+完整配置导入会在 SQLite `BEGIN IMMEDIATE` 下重新计算当前哈希并再次检查未提交且未过期的答题会话；如果将删除的题目仍被引用，返回 `ACTIVE_ATTEMPT_CONFLICT`，不会产生部分写入。设置配置不删除题目，但字体目录变更后会重新排队题库快照同步。字体 URL 必须是 HTTPS，且只能来自当前 `QUIZ_R2_PUBLIC_BASE_URL` 或 `QUIZ_FONT_SOURCE_ORIGINS`；系统保留分区不能从 manifest 中省略。错误响应中的 `details` 最多返回 200 项，并以 `errors_truncated` 标记截断。
 
 ### 单独题库迁移
 

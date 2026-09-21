@@ -1,4 +1,4 @@
-"""Acceptance tests for the single-file configuration transfer contract."""
+"""Acceptance tests for the configuration and question transfer contracts."""
 
 from fastapi.testclient import TestClient
 
@@ -18,6 +18,8 @@ def test_export_preview_import_round_trip_uses_stable_keys(client: TestClient) -
     manifest = exported.json()
     assert manifest["format"] == "mikanquiz-admin-config"
     assert manifest["version"] == 1
+    assert manifest["scope"] == "full"
+    assert "mikanquiz-admin-config.json" in exported.headers["content-disposition"]
     assert all("config_key" in group for group in manifest["option_catalog"]["groups"])
     assert all("id" not in group for group in manifest["option_catalog"]["groups"])
     assert all("config_key" in question for question in manifest["questions"])
@@ -72,6 +74,86 @@ def test_question_bank_export_and_import_appends_questions(client: TestClient) -
     current = client.get("/api/v1/admin/questions", headers=headers).json()
     assert current["total"] == 4
     assert sum(item["text"] == "从题库文件追加的题目" for item in current["items"]) == 1
+
+
+def test_font_url_only_catalog_save_does_not_enqueue_question_sync(client: TestClient) -> None:
+    """Uploading a font file must not rebuild the question projection."""
+    headers, _ = configure_two_question_quiz(client)
+    with client.app.state.database.sessions() as session:
+        before_ids = {item.id for item in session.query(SyncOutbox).all()}
+
+    catalog = client.get("/api/v1/admin/option-groups", headers=headers).json()
+    option = next(
+        option
+        for group in catalog
+        for option in group["options"]
+        if option["id"]
+    )
+    option["font_url"] = "https://fonts.example.test/quiz.woff2"
+    response = client.put(
+        "/api/v1/admin/option-groups",
+        headers=headers,
+        json={"groups": catalog},
+    )
+    assert response.status_code == 200, response.text
+
+    with client.app.state.database.sessions() as session:
+        after_ids = {item.id for item in session.query(SyncOutbox).all()}
+    assert after_ids == before_ids
+
+
+def test_settings_config_export_and_import_preserves_questions(client: TestClient) -> None:
+    """Settings-only transfer changes editable settings without replacing the question bank."""
+    headers, _ = configure_two_question_quiz(client)
+    exported = client.get(
+        "/api/v1/admin/config/export?scope=settings", headers=headers
+    )
+    assert exported.status_code == 200, exported.text
+    manifest = exported.json()
+    assert manifest["scope"] == "settings"
+    assert "mikanquiz-admin-settings.json" in exported.headers["content-disposition"]
+    assert manifest["questions"] == []
+    assert "settings" in manifest
+
+    mismatch = client.post(
+        "/api/v1/admin/config/import/validate",
+        headers=headers,
+        json={"manifest": manifest, "mode": "replace"},
+    )
+    assert mismatch.status_code == 422
+    assert mismatch.json()["error"]["code"] == "CONFIG_SCOPE_MODE_MISMATCH"
+
+    manifest["settings"]["question_count"] = 3
+    preview = client.post(
+        "/api/v1/admin/config/import/validate",
+        headers=headers,
+        json={"manifest": manifest, "mode": "settings"},
+    )
+    assert preview.status_code == 200, preview.text
+    data = preview.json()
+    assert data["mode"] == "settings"
+    assert data["diff"]["questions_added"] == 0
+    assert data["diff"]["questions_deleted"] == 0
+    assert data["diff"]["questions_updated"] == 0
+
+    imported = client.post(
+        "/api/v1/admin/config/import",
+        headers=headers,
+        json={
+            "manifest": manifest,
+            "mode": "settings",
+            "expected_current_hash": data["current_hash"],
+            "expected_incoming_hash": data["incoming_hash"],
+            "confirm": True,
+        },
+    )
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["mode"] == "settings"
+
+    current = client.get("/api/v1/admin/questions", headers=headers).json()
+    assert current["total"] == 2
+    settings = client.get("/api/v1/admin/settings", headers=headers).json()
+    assert settings["question_count"] == 3
 
 
 def test_import_rejects_stale_preview(client: TestClient) -> None:
