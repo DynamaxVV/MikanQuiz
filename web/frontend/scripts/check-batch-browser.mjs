@@ -73,6 +73,22 @@ async function draw(x, y, w, h) {
   await page.mouse.up();
   assert.equal(await page.getByRole('button', { name: '移动', exact: true }).getAttribute('aria-pressed'), 'true', 'Completing a region should switch back to pan mode');
 }
+async function moveSelected(dx, dy) {
+  const region = page.locator('.region rect[data-region]').first();
+  await region.scrollIntoViewIfNeeded();
+  const bounds = await region.boundingBox();
+  const svg = page.locator('.canvas-viewport svg');
+  const svgBounds = await svg.boundingBox();
+  const viewBox = await svg.getAttribute('viewBox');
+  assert.ok(bounds && svgBounds && viewBox);
+  const scale = svgBounds.width / Number(viewBox.split(' ')[2]);
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx * scale, y + dy * scale, { steps: 4 });
+  await page.mouse.up();
+}
 async function resizeSelected(dx, dy) {
   const handle = page.locator('.handle[data-corner="se"]');
   await handle.scrollIntoViewIfNeeded();
@@ -129,9 +145,13 @@ try {
   assert.equal(pageListMetrics.overflowY, 'auto');
   assert.ok(pageListMetrics.scrollHeight > pageListMetrics.clientHeight, 'Page thumbnails should scroll when they exceed the rail height');
   await draw(70, 50, 500, 130);
+  await moveSelected(10, 15); // pan mode must still allow moving the selected region
+  await waitSaved();
+  const moved = (await stored()).pages[0].regions[0];
+  assert.deepEqual([moved.x, moved.y, moved.width, moved.height], [80, 65, 500, 130]);
   await complete('第一处合成解析');
   const first = (await stored()).pages[0].regions[0];
-  assert.deepEqual([first.x, first.y, first.width, first.height], [70, 50, 500, 130]);
+  assert.deepEqual([first.x, first.y, first.width, first.height], [80, 65, 500, 130]);
   await page.locator('.region rect[data-region]').first().click();
   await page.locator('.region-editor select').first().selectOption('1');
   await waitSaved();

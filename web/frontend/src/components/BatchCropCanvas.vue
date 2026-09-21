@@ -39,7 +39,10 @@ function start(event: PointerEvent) {
   const id = target.dataset.region;
   const region = props.page.regions.find((item) => item.id === id);
   if (region) emit('select', region.id);
-  const pan = mode.value === 'pan' || space.value;
+  // Region editing should remain available after drawing switches back to pan.
+  // Holding Space is the explicit way to pan across an existing region.
+  const editRegion = !space.value && !!region && !isFrozen(region);
+  const pan = space.value || (mode.value === 'pan' && !editRegion);
   if (!pan && region && isFrozen(region)) return;
   svg.value!.setPointerCapture(event.pointerId);
   drag = { kind: pan ? 'pan' : target.dataset.corner ? 'resize' : region ? 'move' : 'draw',
