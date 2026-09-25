@@ -87,5 +87,5 @@ watch(editing, async (open) => {
 .name-dialog label { display: grid; gap: 7px; font-size: 14px; font-weight: 650; }
 .name-dialog input { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-input); padding: 11px 12px; color: var(--color-text); background: var(--color-surface-warm); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-@media (max-width: 600px) { .brand-header { min-height: 64px; } }
+@media (max-width: 600px) { .brand-header { min-height: 44px; } .header-actions { gap: 2px; } .name-button, .admin-button { min-height: 32px; padding: 0 8px; font-size: 14px; } }
 </style>

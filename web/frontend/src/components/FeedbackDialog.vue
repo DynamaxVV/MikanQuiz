@@ -112,6 +112,7 @@ onBeforeUnmount(releaseUrls);
 <style scoped>
 .feedback-trigger { min-height: 40px; border: 0; border-radius: var(--radius-button); padding: 0 14px; color: var(--color-text-muted); background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
 .feedback-trigger:hover { color: var(--color-action); background: var(--color-surface-accent); }
+@media (max-width: 600px) { .feedback-trigger { min-height: 32px; padding: 0 8px; font-size: 14px; } }
 .feedback-dialog { width: min(620px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 32px)); padding: 0; border: 1px solid var(--color-border); border-radius: 20px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 24px 70px rgba(51, 39, 24, .24); }
 .feedback-dialog::backdrop { background: rgba(51, 39, 24, .32); }
 .feedback-form { padding: 24px; overflow-y: auto; }
