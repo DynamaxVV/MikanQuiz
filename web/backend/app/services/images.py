@@ -1,4 +1,4 @@
-"""Server-side image and font upload through the local AWS SDK v3 R2 adapter."""
+"""Server-side image and font upload through the configured storage backend."""
 
 import hashlib
 import json
@@ -89,7 +89,7 @@ def write_local(
 
 
 def upload_json(settings: AppSettings, key: str, data: dict | list) -> str:
-    """Upload a JSON document to R2 with no-cache policy."""
+    """Upload a JSON document to the configured backend with no-cache policy."""
     if settings.storage_backend == "local":
         parent, _, filename = key.rpartition("/")
         content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -122,7 +122,7 @@ def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: 
 
 
 def upload_font(settings: AppSettings, content: bytes, content_type: str, filename: str = "font") -> str:
-    """Validate one font file, deduplicate by content hash, upload only if absent."""
+    """Validate one font file, deduplicate it in R2, or write it locally for development."""
     suffix = validate_font(content, content_type)
     if settings.storage_backend == "local":
         return write_local(settings, content, "quiz-fonts", suffix)

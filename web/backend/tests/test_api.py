@@ -238,30 +238,6 @@ def test_font_explanation_cache_is_server_side_and_shared_by_font(client: TestCl
     assert invalid.status_code == 422
 
 
-def test_font_explanation_cache_is_server_side_and_shared_by_font(client: TestClient) -> None:
-    """A cache survives the editor flow because it is keyed only by the font option."""
-    headers, questions = configure_two_question_quiz(client)
-    font_option_id = questions[0]["correct_option_id"]
-    endpoint = f"/api/v1/admin/font-explanation-cache/{font_option_id}"
-
-    empty = client.get(endpoint, headers=headers)
-    assert empty.status_code == 200
-    assert empty.json()["explanation"] == ""
-    assert empty.json()["updated_at"] is None
-
-    saved = client.put(endpoint, headers=headers, json={"explanation": "看横画收笔和撇捺关系"})
-    assert saved.status_code == 200, saved.text
-    assert saved.json()["explanation"] == "看横画收笔和撇捺关系"
-
-    reread = client.get(endpoint, headers=headers)
-    assert reread.status_code == 200
-    assert reread.json()["explanation"] == "看横画收笔和撇捺关系"
-    assert reread.json()["updated_at"]
-
-    invalid = client.put(endpoint, headers=headers, json={"explanation": "   "})
-    assert invalid.status_code == 422
-
-
 def test_disabled_administrator_immediately_loses_existing_session(
     client: TestClient, database: Database
 ) -> None:
@@ -277,7 +253,7 @@ def test_disabled_administrator_immediately_loses_existing_session(
 def test_admin_image_upload_uses_r2_adapter_and_returns_public_url(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Keep WebDAV credentials server-side while the browser receives only a URL."""
+    """Keep storage credentials server-side while the browser receives only a URL."""
     captured: dict[str, object] = {}
 
     def fake_run(settings: AppSettings, path: str, content_type: str) -> str:
@@ -305,7 +281,7 @@ def test_admin_image_upload_uses_r2_adapter_and_returns_public_url(
 
 
 def test_admin_image_upload_rejects_unsupported_content(client: TestClient) -> None:
-    """Reject malformed uploads before checking or using WebDAV configuration."""
+    """Reject malformed uploads before checking or using storage configuration."""
     response = client.post(
         "/api/v1/admin/images",
         headers=admin_headers(client),

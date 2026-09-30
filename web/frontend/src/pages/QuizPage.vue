@@ -175,7 +175,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); window
                 <span class="toggle-thumb"></span>
               </span>
             </label>
-            <div class="answers" role="radiogroup" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in filteredGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
+            <div class="answers" role="group" :aria-label="`${currentQuestion.text}的选项`"><section v-for="group in filteredGroups" :key="group.id" class="option-group"><h2>{{ group.name }}</h2><button v-for="option in group.options" :key="option.id" type="button" :aria-pressed="answers[currentQuestion.id] === option.id" :style="fontRenderEnabled ? fontStyle(option) : undefined" :class="{ selected: answers[currentQuestion.id] === option.id }" @pointerdown="onOptionPointerDown(option, $event)" @pointerup="onOptionPointerUp" @pointerleave="onOptionPointerLeave" @pointercancel="onOptionPointerUp" @click="chooseWithGuard(option.id)">{{ option.name }}</button></section></div>
             <p class="font-preview-tips">长按字体选项可预览字体效果</p>
             <p v-if="fontError" class="status-error" role="status">{{ fontError }}</p>
             <p v-if="missingNotice" class="status-info" role="status">{{ missingNotice }}</p>

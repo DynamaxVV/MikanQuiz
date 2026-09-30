@@ -631,7 +631,7 @@ async def upload_admin_image(
     auth: AdminAuth = Depends(require_admin),
     settings: AppSettings = Depends(get_app_settings),
 ) -> ImageUploadResponse:
-    """Upload a bounded administrator image through server-side WebDAV credentials."""
+    """Upload a bounded administrator image through the configured storage backend."""
     content = await image.read(image_service.MAX_IMAGE_BYTES + 1)
     content_type = image.content_type or ""
     started_at = perf_counter()
@@ -664,7 +664,7 @@ async def upload_admin_font(
     auth: AdminAuth = Depends(require_admin),
     settings: AppSettings = Depends(get_app_settings),
 ) -> ImageUploadResponse:
-    """Upload a font file (TTF/OTF/WOFF/WOFF2) through the R2 adapter."""
+    """Upload a font file (TTF/OTF/WOFF/WOFF2) through the configured backend."""
     content = await font.read(image_service.MAX_FONT_BYTES + 1)
     content_type = font.content_type or ""
     started_at = perf_counter()

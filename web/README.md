@@ -1,6 +1,6 @@
 # 本地运行 Web 与独立后端
 
-当前阶段不需要 Nginx、域名或旧云数据迁移。后端使用本地 SQLite，前端开发服务器自动将 `/api` 转发到后端。
+当前 Web 是主要开发路径。本地阶段不需要 Nginx、域名或旧云数据迁移；后端使用本地 SQLite，前端开发服务器自动将 `/api` 转发到后端。微信小程序已冻结，仅作为兼容客户端保留。
 
 ## 一条命令启动前后端
 
@@ -49,24 +49,28 @@ npm install
 
 第二步完成校验后，页面下方的“题库导入与导出”工具用于日常批量维护：点击“导出题库 JSON”下载当前题库，选择同格式文件后点击“追加到当前题库”。独立导入只追加题目，不覆盖或去重已有题目；页面会显示读取、新增和未导入数量以及失败原因。不要重复导入同一文件，除非确实需要复制题目。
 
-## 图片上传到 Cloudflare R2
+## 图片存储与上传
 
-后端启动时默认读取 `web/backend/.env`。先复制示例文件，再填入实际值（`.env` 已被忽略，不能提交到仓库）：
+后端启动时默认读取 `web/backend/.env`。生产默认使用 Cloudflare R2；本地开发可使用 `QUIZ_STORAGE_BACKEND=local`，把文件写入本地目录。先复制示例文件，再填入实际值（`.env` 已被忽略，不能提交到仓库）：
 
 ```sh
 cd web/backend
 cp .env.example .env
 ```
 
-在 `.env` 中填写 `QUIZ_R2_ENDPOINT`、`QUIZ_R2_ACCESS_KEY_ID`、`QUIZ_R2_SECRET_ACCESS_KEY`、`QUIZ_R2_BUCKET` 与 `QUIZ_R2_PUBLIC_BASE_URL`。后者是绑定到 R2 bucket 的自定义 HTTPS 域名。进程环境变量优先于 `.env`。
+R2 模式需要填写 `QUIZ_R2_ENDPOINT`、`QUIZ_R2_ACCESS_KEY_ID`、`QUIZ_R2_SECRET_ACCESS_KEY`、`QUIZ_R2_BUCKET` 与 `QUIZ_R2_PUBLIC_BASE_URL`。后者是绑定到 R2 bucket 的自定义 HTTPS 域名。进程环境变量优先于 `.env`。本地模式使用 `QUIZ_LOCAL_STORAGE_PATH` 和 `QUIZ_LOCAL_PUBLIC_BASE_URL`，只适合开发，不应把上传目录直接暴露到公网。
 
-首次运行还需安装官方 AWS SDK：`cd web/r2-uploader && npm install`。管理端选择图片后，FastAPI 调用本地 Node 适配器，以 AWS SDK v3 写入 R2，并返回自定义域名外链；密钥不会进入浏览器。
+R2 模式首次运行还需安装官方 AWS SDK：`cd web/r2-uploader && npm install`。管理端选择图片后，FastAPI 调用本地 Node 适配器，以 AWS SDK v3 写入 R2，并返回自定义域名外链；密钥不会进入浏览器。本地模式不需要该适配器。
 
 ## 本地检查
 
+从仓库根目录执行：
+
 ```sh
-cd web/backend && .venv/bin/python -m pytest tests -q
-cd web/frontend && npm run test:api-contract && npm run build
+(cd web/backend && .venv/bin/python -m pytest tests -q)
+npm --prefix web/frontend run test:api-contract
+npm --prefix web/frontend run test:batch-core
+npm --prefix web/frontend run build
 ```
 
 正式上线、Nginx、OSS 备份、备案域名与旧云数据迁移均另行执行；对应预案见 [`../docs/WEB_ARCHITECTURE_ZH.md`](../docs/WEB_ARCHITECTURE_ZH.md)。

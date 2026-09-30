@@ -195,7 +195,7 @@ class QuestionImportResult(ApiModel):
 
 
 class ImageUploadResponse(ApiModel):
-    """The public image URL produced by the server-side R2 upload."""
+    """The public image URL produced by the configured storage backend."""
 
     image_url: str
 

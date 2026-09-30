@@ -38,7 +38,6 @@ async function loadFont(option: Pick<FontOption, 'fontUrl'>): Promise<void> {
     fontError.value = '';
   } catch {
     setFontState(option.fontUrl, { family, state: 'failed' });
-    fontError.value = '字体加载失败，已使用系统字体。';
   }
 }
 
