@@ -44,7 +44,7 @@ function beginQuiz(): void {
               </p>
               <p class="recruit-groups">
                 <span>加入我们：826788824</span>
-                <span>一起闲聊：554843287</span>
+                <span>一起闲聊：470375645</span>
               </p>
             </aside>
           </div>
