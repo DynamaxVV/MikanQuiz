@@ -38,7 +38,15 @@ function beginQuiz(): void {
               <span><strong>嵌字小本本</strong><small>一点点点点也许嵌字会用上的教程</small></span>
               <span aria-hidden="true">→</span>
             </RouterLink>
-            <p class="hint">提交后会自动评分，并告诉你每一题的思路。</p>
+            <aside class="recruit" aria-label="汉化工房九九组招募">
+              <p class="recruit-intro">
+                <strong>汉化工房九九组</strong><span> · </span>我们是(主打)萌系轻百合的汉化组
+              </p>
+              <p class="recruit-groups">
+                <span>加入我们：826788824</span>
+                <span>一起闲聊：554843287</span>
+              </p>
+            </aside>
           </div>
         </div>
         <div class="hero-artwork">
@@ -76,10 +84,16 @@ function beginQuiz(): void {
 .primary-card small { color: #fff; }
 .reference-card { color: var(--color-text); background: var(--color-surface); }
 .reference-card small { color: var(--color-text-muted); }
-.hint { margin: 18px auto 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.65; text-align: center; }
+.recruit { display: flex; height: calc(14px * 1.65 + 18px); flex-direction: column; justify-content: center; margin: 0; color: var(--color-text-muted); text-align: center; }
+.recruit p { margin: 0; line-height: 20px; white-space: nowrap; }
+.recruit-intro { font-size: 12px; }
+.recruit-intro strong { color: var(--color-action); font-size: 15px; font-weight: 750; }
+.recruit-groups { display: flex; justify-content: center; gap: 24px; font-size: 12px; font-weight: 400; }
 .hero-artwork { min-width: 0; }
 .mascot-artwork { display: block; width: 100%; height: auto; filter: drop-shadow(0 18px 32px rgba(116, 72, 20, .10)); transform: rotate(-1deg); }
 @media (max-width: 1023px) { .hero { min-height: auto; grid-template-columns: 1fr; gap: 48px; } .hero-main { width: min(100%, 680px); max-width: none; } .hero-artwork { width: min(100%, 680px); } }
-@media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); } .hero { gap: 12px; padding: 8px 0 24px; } .hero-main { display: contents; } .hero-copy { grid-row: 1; } .hero-title { width: 100%; margin-top: 8px; } .subtitle { margin-top: 12px; font-size: 16px; } .hero-artwork { grid-row: 2; width: min(92%, 460px); margin: 0 auto; } .action-stack { grid-row: 3; gap: 10px; margin-top: 0; } .action-card { min-height: 96px; padding: 18px 20px; } .action-card strong { font-size: 20px; } .action-card small { margin-top: 5px; font-size: 13px; } .hint { margin-top: 10px; } .mascot-artwork { transform: rotate(-.7deg); } }
+@media (min-width: 1024px) { .hero-artwork { transform: translateY(24px); } }
+@media (max-width: 767px) { .content { width: min(100% - 32px, 1280px); } .hero { gap: 12px; padding: 8px 0 24px; } .hero-main { display: contents; } .hero-copy { grid-row: 1; } .hero-title { width: 100%; margin-top: 8px; } .subtitle { margin-top: 12px; font-size: 16px; } .hero-artwork { grid-row: 2; width: min(92%, 460px); margin: 0 auto; } .action-stack { grid-row: 3; gap: 10px; margin-top: 0; } .action-card { min-height: 96px; padding: 18px 20px; } .action-card strong { font-size: 20px; } .action-card small { margin-top: 5px; font-size: 13px; } .recruit { height: calc(14px * 1.65 + 10px); } .recruit p { line-height: 16px; } .recruit-intro { font-size: 11px; } .recruit-intro strong { font-size: 12px; } .recruit-groups { gap: 16px; font-size: 11px; } .mascot-artwork { transform: rotate(-.7deg); } }
+@media (max-width: 359px) { .recruit-intro { font-size: 9px; } .recruit-intro strong { font-size: 11px; } .recruit-groups { gap: 12px; } }
 @media (prefers-reduced-motion: reduce) { .action-card:hover, .action-card:active { transform: none; } }
 </style>
