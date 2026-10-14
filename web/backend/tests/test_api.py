@@ -567,3 +567,15 @@ def test_font_stream_subset_woff2(client: TestClient, monkeypatch: pytest.Monkey
     assert response.status_code == 200
     assert response.headers["content-type"] == "font/woff2"
     assert response.content.startswith(b"wOF2")
+
+    # Test HEAD request
+    head_resp = client.head("/api/v1/fonts/stream?url=https%3A%2F%2Fimages.example.test%2Ffont.ttf&text=%E6%B8%85%E7%88%BD")
+    assert head_resp.status_code == 200
+    assert head_resp.headers["content-type"] == "font/woff2"
+
+    # Test memory/disk cache hit without hitting AsyncClient
+    monkeypatch.setattr("app.services.font_subset.get_cached_subset", lambda url, text: b"wOF2_cached_data")
+    cached_resp = client.get("/api/v1/fonts/stream?url=https%3A%2F%2Fimages.example.test%2Ffont.ttf&text=%E6%B8%85%E7%88%BD")
+    assert cached_resp.status_code == 200
+    assert cached_resp.content == b"wOF2_cached_data"
+    assert cached_resp.headers["x-font-subset"] == "hit" 

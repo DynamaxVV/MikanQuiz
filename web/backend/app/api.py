@@ -214,7 +214,9 @@ async def create_feedback(
 
 
 @router.get("/fonts/stream")
+@router.head("/fonts/stream")
 async def stream_font(
+    request: Request,
     url: str = Query(...),
     text: str | None = Query(default=None),
     settings: AppSettings = Depends(get_app_settings),
@@ -223,6 +225,28 @@ async def stream_font(
     base = settings.r2_public_base_url.rstrip("/")
     if not url.startswith(base + "/") and url != base:
         raise ApiError(400, "INVALID_FONT_URL", "字体地址无效")
+
+    clean_text = text.strip() if text else ""
+    if clean_text:
+        from app.services.font_subset import get_cached_subset, get_subset_status
+        cached_data = get_cached_subset(url, clean_text)
+        if cached_data is not None:
+            status = get_subset_status()
+            headers = {
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "Content-Length": str(len(cached_data)),
+                "X-Font-Subset-Available": str(status["fonttools_available"]),
+                "X-Font-Subset": "hit",
+            }
+            if request.method == "HEAD":
+                return Response(status_code=200, media_type="font/woff2", headers=headers)
+            return Response(
+                content=cached_data,
+                media_type="font/woff2",
+                headers=headers,
+            )
+
     from app.services.font_subset import subset_font_to_woff2, get_subset_status, get_or_fetch_raw_font
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -235,14 +259,16 @@ async def stream_font(
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public, max-age=31536000, immutable",
     }
-    if text and text.strip():
-        from app.services.font_subset import subset_font_to_woff2, get_subset_status
+    if clean_text:
         status = get_subset_status()
         headers["X-Font-Subset-Available"] = str(status["fonttools_available"])
         if status.get("import_error"):
             headers["X-Font-Subset-Error"] = status["import_error"][:100]
 
-        content = await run_in_threadpool(subset_font_to_woff2, raw_content, text.strip())
+        try:
+            content = await run_in_threadpool(subset_font_to_woff2, raw_content, clean_text, url)
+        except TypeError:
+            content = await run_in_threadpool(subset_font_to_woff2, raw_content, clean_text)
         if content.startswith(b"wOF2"):
             content_type = "font/woff2"
             headers["X-Font-Subset"] = "hit"
@@ -250,6 +276,10 @@ async def stream_font(
             headers["X-Font-Subset"] = "fallback"
     else:
         content = raw_content
+
+    headers["Content-Length"] = str(len(content))
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type=content_type, headers=headers)
 
     return Response(
         content=content,
