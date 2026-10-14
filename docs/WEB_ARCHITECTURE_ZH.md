@@ -1,23 +1,25 @@
-# 小程序与 Web 共用后端：技术选型与迁移方案
+# Web 主路径与小程序兼容迁移方案
 
 ## 1. 文档状态
 
-- 状态：已确认方案
-- 日期：2026-07-21
+- 状态：历史设计与迁移预案；当前实现以仓库代码和 `AGENTS.md` 为准
+- 最后核对：2026-09-22
 - UI 设计合同：[`../DESIGN.md`](../DESIGN.md)
-- 当前系统：微信小程序 + 微信云函数 + 微信云数据库/云存储
-- 目标系统：微信小程序与 PC Web 长期并存，共用一套部署在独立服务器上的后端
+- 当前产品：PC Web + FastAPI/SQLite；生产图片默认使用 Cloudflare R2，本地开发可使用 local 存储
+- 兼容客户端：微信小程序已切换到独立 FastAPI API，进入冻结维护；当前只保留 `miniprogram/app.json` 注册的答题和管理页面，未注册的旧 `chatBot`、`foodBuy` 页面及其支持组件已清理；`cloudfunctions/quiz/` 仅保留为历史实现和迁移参考
+
+> 本文保留旧云数据迁移、切换和回滚预案，相关章节不是当前运行架构，也不会自动触发迁移或部署。当前接口、目录和字段以 `web/backend/`、`web/frontend/` 及对应测试为准。
 
 ## 2. 已确认需求
 
 - Web 和小程序都提供匿名答题；昵称可选，不注册账号。
 - 同一设备可在 24 小时内恢复未完成答题；提交后不可重复提交。
 - Web 完整覆盖昵称、难度选择、答题、评分、错题解析和全部管理功能。
-- Web 新增管理员维护的"嵌字笔记"；小程序暂不增加。
+- Web 提供管理员维护的“嵌字笔记”；冻结小程序不再新增对应 UI。
 - 管理员有多个独立账号、权限相同；小程序和 Web 使用同一组账号密码。
 - 管理员账号只通过服务器命令新增、改密、停用和恢复，不提供后台账号管理页面。
 - 题目在 PC Web 上逐题录入；管理端同时支持题库 JSON 批量导入/导出，不做 Excel/ZIP 导入。
-- 管理端选择题图后由 FastAPI 使用服务器侧 Cloudflare R2 凭据上传；数据库只保存返回的公开 HTTPS 图片直链。
+- 管理端选择题图后由 FastAPI 使用配置的存储后端上传；生产默认是 Cloudflare R2，数据库只保存返回的公开 URL。
 - 本阶段不迁移旧云数据；新 SQLite 从空库开始，旧云数据继续保留且不删除。
 - 预计同时在线约 10 人、每日提交几十次、题库几百题。
 - 提交记录暂时永久保留；业务表不保存用户 IP。
@@ -32,7 +34,7 @@
 | Layer | Choice | Decision |
 | --- | --- | --- |
 | Web | Vue 3 + TypeScript + Vite | 公开端自定义 UI，管理端适合表单与宽屏布局 |
-| Web routing | Vue Router | 同一工程承载公开端和管理端两套 layout |
+| Web routing | Vue Router | 同一 SPA 承载公开端和管理端路由 |
 | Admin UI | Element Plus，按需导入 | 复用表单、表格、分页和对话框，不影响公开端视觉 |
 | Client state | Vue composables + local state | 首版不引入 Pinia；状态规模不足以证明额外依赖必要 |
 | HTTP client | Native `fetch` | 首版不引入 Axios |
@@ -71,7 +73,9 @@ PC Web ─────────────┐
 微信小程序 ─────────┘                              ├─> Vue dist
                                                    └─> /api -> Uvicorn/FastAPI
                                                                   ├─> SQLite
-                                                                  └─> 坚果云公开 HTTPS 图片 URL
+                                                                  └─> Cloudflare R2 公开 HTTPS 图片 URL
+
+本地开发可将图片后端切换为 `QUIZ_STORAGE_BACKEND=local`；local 上传目录只用于本机调试，不是生产公开存储。
 
 SQLite ─> 本地在线备份快照 ─> 阿里云 OSS
 ```
@@ -95,22 +99,22 @@ https://quiz.example.com/api/   FastAPI API
 
 ## 6. 建议目录
 
-在迁移完成前保留现有 `miniprogram/` 和 `cloudfunctions/`，新增代码集中在 `web/`：
+当前代码结构如下；`miniprogram/` 和 `cloudfunctions/` 作为冻结客户端及历史迁移参考保留，新增产品代码集中在 `web/`：
 
 ```text
 web/
   frontend/
     src/
-      layouts/
+      api/
       pages/
       components/
       composables/
-      pages/admin/AdminFontReferencesPage.vue
+      router/
       styles/tokens.css
   backend/
     app/
       main.py
-      api/
+      api.py
       models.py
       schemas.py
       database.py
@@ -122,6 +126,9 @@ web/
     migrate_cloud_export.py
     backup_sqlite.py
     sync_worker.py
+  r2-uploader/
+    upload.mjs
+    delete.mjs
   deploy/
     nginx.conf.example
     quiz-api.service
@@ -140,20 +147,21 @@ web/
 
 ## 7. 数据模型
 
-### 7.1 `questions`
+### 7.1 `option_groups`、`font_options` 与 `questions`
+
+`font_options` 是管理员维护的可选字体目录，按 `option_groups` 分区展示；每个字体通过 `minimum_difficulty` 控制最低可用难度。难度范围是 1–3。
 
 | Field | Notes |
 | --- | --- |
-| `id` | 整数或 UUID 主键；迁移时另存旧云 `_id` 便于审计 |
+| `id` | 整数主键；迁移时另存旧云 `_id` 便于审计 |
 | `text` | 题干，非空，最长 500 字符 |
-| `image_url` | 可空 HTTPS URL；替代 `imageFileID` |
-| `difficulty` | 1–5 |
-| `option_a` … `option_d` | 四个非空选项 |
-| `answer` | A/B/C/D |
+| `image_url` | 题图 URL；生产为 HTTPS，本地开发可使用 loopback HTTP |
+| `difficulty` | 1–3 |
+| `correct_option_id` | 指向 `font_options.id` 的正确字体 |
 | `explanation` | 统一解析，非空，最长 1000 字符 |
 | `created_at`, `updated_at` | UTC 时间 |
 
-不另建 options 表：选项固定为四个，拆表只增加查询与编辑复杂度。
+选项不是固定四项；公开答题接口返回按分区组织的 `option_groups`，管理端通过字体目录选择正确选项。
 
 ### 7.2 `quiz_settings`
 
@@ -188,7 +196,7 @@ python -m app.admin_cli enable USERNAME
 - 未完成答案先保存在客户端；服务端负责恢复题目集合和最终评分边界。
 - 提交操作在单个事务内验证未过期/未提交、评分、写提交记录并封存 attempt。
 
-这同时解决当前实现的评分边界问题：现在取题使用随机子集，但提交阶段将整个题库传入评分函数，见 [`../cloudfunctions/quiz/index.js`](../cloudfunctions/quiz/index.js) 的 `getQuestions` 与 `submit` 分支。新系统必须只评分 attempt 绑定的题目。
+旧云函数曾在取题与评分边界上存在不一致，相关代码见 [`../cloudfunctions/quiz/index.js`](../cloudfunctions/quiz/index.js)，这里只作为历史问题记录。当前实现由 [`../web/backend/app/services/quiz.py`](../web/backend/app/services/quiz.py) 只对 attempt 绑定的题目评分。
 
 ### 7.5 `submissions` and `submission_answers`
 
@@ -246,7 +254,7 @@ POST   /api/v1/quiz/attempts/submit
 
 - 创建 attempt 只返回清理后的题目，不返回答案和解析。
 - 恢复需要 attempt token；过期返回明确状态，客户端清除本地令牌。
-- 提交体只接受题目 ID → A/B/C/D；拒绝不属于该 attempt 的题目。
+- 提交体只接受题目 ID → `font_options.id`；拒绝不属于该 attempt 的题目。
 - 提交重试若已完成，返回同一次提交的稳定结果，不再新增记录。
 - 退出答题不需要二次确认；客户端“重新开始”清除本地未完成进度后回到难度选择。
 
@@ -285,9 +293,9 @@ GET    /api/v1/admin/questions/export
 POST   /api/v1/admin/questions/import
 ```
 
-嵌字笔记卡片由 SQLite 的 `font_references` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过 `POST /api/v1/admin/font-references` 新增、`PATCH /api/v1/admin/font-references/{id}` 更新，通过 `DELETE /api/v1/admin/font-references/{id}` 删除。图片仍经受保护的 `/api/v1/admin/images` 上传。凭据绝不返回浏览器、写入数据库或提交到仓库。
-- 后端以随机对象名写入配置目录，并返回由 `QUIZ_IMAGE_PUBLIC_BASE_URL` 组成的公开 HTTPS URL；管理表单自动填入并即时预览。
-- Web 和小程序直接请求该公开直链；后端不代传图片，也不提供匿名文件上传 API。
+嵌字笔记卡片由 SQLite 的 `font_references` 和 `font_reference_sections` 表拥有。公开页通过 `GET /api/v1/font-references` 读取；管理员通过对应的 `/api/v1/admin/font-references` 接口维护。题图和字体通过受保护的 `/api/v1/admin/images`、`/api/v1/admin/fonts` 上传，后端根据 `QUIZ_STORAGE_BACKEND` 使用 R2 或 local 存储，凭据绝不返回浏览器、写入数据库或提交到仓库。
+- 管理表单先显示浏览器本地 `blob:` 预览，保存时才上传；数据库保存配置后端返回的公开 URL。
+- Web 和冻结小程序兼容客户端使用公开 URL；当前 API 不提供匿名文件上传。
 - 当前不处理旧云存储图片，也不建立 `old_image_file_id -> new_image_url` 映射；恢复迁移时再单独制作并校验映射。
 
 正式切换前，图片校验器必须确认：
@@ -409,11 +417,11 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 - 按 `DESIGN.md` 实现公开答题、管理端和嵌字笔记卡片。
 - 结果门槛：构建通过；1440px/1024px/键盘/减少动态效果的视觉与功能验收通过。
 
-### Stage 3 — Mini Program adapter
+### Stage 3 — Mini Program adapter（已完成，冻结维护）
 
-- 将 `wx.cloud.callFunction` 替换为统一的 API client。
-- 把管理员认证改为账号密码，把图片字段改为 HTTPS URL。
-- 结果门槛：真机通过备案域名完成答题、提交与管理登录。
+- `miniprogram/services/api.js` 已替换主要业务路径中的 `wx.cloud.callFunction`，统一请求 `/api/v1`。
+- 管理员认证使用账号密码，图片字段使用后端返回的 URL。
+- 后续只处理影响兼容性的修复；新产品功能以 Web 为准。
 
 ### Stage 4 — Migration rehearsal（暂缓）
 
@@ -427,9 +435,9 @@ UI 验收维度见 [`../DESIGN.md`](../DESIGN.md) 的 Accessibility、Responsive
 
 ## 17. 待确认但不阻塞编码的事项
 
-- 坚果云公开直链的稳定格式、是否存在登录/防盗链限制，以及 Web 与小程序真机可达性。
 - 正式域名、中转服务器地址、真实 IP header 约定和 TLS 终止位置。
-- 嵌字笔记首批静态图片清单。
+- 生产 R2 公共域名、字体跨域策略和真实图片可达性。
+- 嵌字笔记首批图片、标题和排列顺序。
 - 阿里云 OSS bucket、凭证注入方式和生命周期策略。
 
 这些事项不得通过硬编码 R2 密钥或猜测 URL 格式绕过；实现应保留明确配置点，并在正式迁移或生产部署前完成验证。

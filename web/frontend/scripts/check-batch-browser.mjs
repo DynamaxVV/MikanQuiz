@@ -25,6 +25,7 @@ const group = { id: 1, name: '类黑', sort_order: 0, options: [
 await context.route('**/api/v1/**', async route => {
   const path = new URL(route.request().url()).pathname;
   const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  if (path.endsWith('/admin/session')) return json({ username: 'synthetic-operator', expires_at: '2099-01-01T00:00:00Z' });
   const cacheMatch = path.match(/\/admin\/font-explanation-cache\/(\d+)$/);
   if (cacheMatch) {
     const fontOptionId = Number(cacheMatch[1]);
@@ -34,7 +35,6 @@ await context.route('**/api/v1/**', async route => {
     }
     return json({ font_option_id: fontOptionId, explanation: explanationCaches.get(fontOptionId) || '', updated_at: explanationCaches.has(fontOptionId) ? '2099-01-01T00:00:00Z' : null });
   }
-  if (path.endsWith('/admin/session')) return json({ username: 'synthetic-operator', expires_at: '2099-01-01T00:00:00Z' });
   if (path.endsWith('/admin/option-groups')) return json([group]);
   if (path.endsWith('/admin/images')) {
     if (failUpload) { failUpload = false; return route.abort(); }

@@ -1,6 +1,6 @@
 # Web Visual Baselines
 
-Captured locally against the Vite development server with a migrated temporary SQLite database on 2026-07-22. “Viewport” is the requested browser viewport; the in-app browser capture API omits scrollbar chrome, so the vertically scrollable editor raster is 1425 × 891 while it was rendered in a 1440 × 900 viewport.
+Captured locally against the Vite development server with a migrated temporary SQLite database on 2026-07-22. These are historical visual baselines, not a claim that the current UI is pixel-identical. “Viewport” is the requested browser viewport; the in-app browser capture API omits scrollbar chrome, so the vertically scrollable editor raster is 1425 × 891 while it was rendered in a 1440 × 900 viewport.
 
 | View | Viewport | Baseline |
 | --- | --- | --- |
@@ -15,11 +15,11 @@ Captured locally against the Vite development server with a migrated temporary S
 | Administrator question editor | 1440 × 900 | [web-admin-question-editor-1425x891.png](web-admin-question-editor-1425x891.png) |
 | Font reference empty state | 1440 × 900 | [web-font-reference-1440x900.png](web-font-reference-1440x900.png) |
 
-The administrator screenshot uses a temporary test account and two temporary acceptance questions. The two broken image thumbnails demonstrate the implemented image-error state because the local test fixture intentionally uses unserved `pan.yurucamp.cn` URLs.
+The administrator screenshot uses a temporary test account and two temporary acceptance questions. The two broken image thumbnails demonstrate the implemented image-error state because that historical fixture intentionally used unserved legacy image URLs.
 
 ## Accessibility checks
 
-- Keyboard: a focused answer radio was verified to move from B to C with `ArrowRight`; the application prevents the native default and records the newly selected answer.
+- Keyboard: the current quiz page uses focused buttons for font options and page-level `ArrowLeft`/`ArrowRight` handlers for previous/next question navigation. The older focused-radio B-to-C check belongs to the historical capture and is not a current implementation contract.
 - Reduced motion: with `prefers-reduced-motion: reduce` emulated, the answer option computed `transitionDuration` was `0s`.
 - 200% logical-width equivalent: at 720 CSS px (the layout width a 1440 px viewport reaches at 200% scaling), `scrollWidth` did not exceed `clientWidth`; the compact baseline is saved above. A target-browser manual zoom check remains part of release smoke testing.
 

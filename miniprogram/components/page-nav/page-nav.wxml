@@ -1,1 +1,0 @@
-<view class="nav" style="padding-top: {{top}}px"><view class="actions"><view class="action" bind:tap="back">‹ 返回</view><view class="action home" bind:tap="home">⌂ 首页</view></view><view class="title">{{title}}</view></view>

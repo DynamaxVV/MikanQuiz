@@ -1,9 +1,0 @@
-
-.markdown-it-code-copy {
-  position: absolute;
-  top: 7.5px;
-  right: 6px;
-  cursor: pointer;
-  outline: none;
-}
-

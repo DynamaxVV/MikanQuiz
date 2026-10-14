@@ -7,6 +7,7 @@ MikanQuiz: Chinese character/font quiz system with a Vue 3 Web frontend and Fast
 ## Miniprogram (Deprecated)
 
 The `miniprogram/` and `cloudfunctions/quiz/` directories contain the original WeChat miniprogram client. **It is no longer maintained.** New features, bug fixes, and UI work should only target the Web frontend (`web/`). Do not add miniprogram compatibility when building new functionality.
+The frozen client retains only the pages registered in `miniprogram/app.json`; unregistered legacy `chatBot`/`foodBuy` pages and their support components have been removed. Recover them from history only when explicitly investigating the old client.
 
 ## Directory Structure
 
@@ -55,34 +56,38 @@ cd web/frontend && npm install
 
 ```sh
 # Backend tests
-cd web/backend && .venv/bin/python -m pytest tests -q
+(cd web/backend && .venv/bin/python -m pytest tests -q)
 
-# Frontend API contract check + build
-cd web/frontend && npm run test:api-contract && npm run build
+# Frontend contract, batch core check and build
+npm --prefix web/frontend run test:api-contract
+npm --prefix web/frontend run test:batch-core
+npm --prefix web/frontend run build
 ```
 
 ## Architecture Notes
 
 - **Database**: SQLite with WAL mode, single Uvicorn worker, Alembic migrations (never `create_all()`)
-- **API**: All endpoints use `/api/v1` prefix, JSON, snake_case fields
+- **API**: Business endpoints use the `/api/v1` prefix, JSON and snake_case fields; `/api/health` and `/api/docs` are infrastructure/documentation exceptions
 - **Auth**: Web uses HttpOnly cookies; admin accounts managed via CLI only
-- **Images**: Uploaded to Cloudflare R2 via server-side adapter; database stores public HTTPS URLs
-- **Image upload flow**: On the question editor page, selected/pasted images are stored locally and shown as blob: URL previews. Upload to R2 happens together with question save, not immediately on selection. The save button shows a loading spinner and the form is disabled during save.
+- **Images**: Production defaults to Cloudflare R2. Local development can use `QUIZ_STORAGE_BACKEND=local`; the database stores the resulting public URL in either mode.
+- **Image upload flow**: On the question editor page, selected/pasted images are held in the browser and shown as `blob:` previews. Upload to the configured backend happens together with question save, not immediately on selection. The save button shows a loading spinner and the form is disabled during save.
 
 ## Key Conventions
 
 - Admin account management: `python -m app.admin_cli {add|list|password|disable|enable} USERNAME`
 - Backend env vars: `QUIZ_DATABASE_URL`, `QUIZ_COOKIE_SECURE`, `QUIZ_ADMIN_SESSION_HOURS`
-- R2 image upload env vars: `QUIZ_R2_ENDPOINT`, `QUIZ_R2_ACCESS_KEY_ID`, `QUIZ_R2_SECRET_ACCESS_KEY`, `QUIZ_R2_BUCKET`, `QUIZ_R2_PUBLIC_BASE_URL`
+- Image storage: `QUIZ_STORAGE_BACKEND=r2|local`. R2 uses `QUIZ_R2_ENDPOINT`, `QUIZ_R2_ACCESS_KEY_ID`, `QUIZ_R2_SECRET_ACCESS_KEY`, `QUIZ_R2_BUCKET`, and `QUIZ_R2_PUBLIC_BASE_URL`; local development uses `QUIZ_LOCAL_STORAGE_PATH` and `QUIZ_LOCAL_PUBLIC_BASE_URL`.
 - Backend reads `.env` from `web/backend/.env` at startup (process env vars take precedence)
 - Frontend uses Element Plus only for admin UI; public quiz UI is custom
 - Design tokens defined in `DESIGN.md`; follow warm color palette (#FFF9F0 background, #A94F1F action)
 - API contract: all snake_case fields, `/api/v1` prefix, errors as `{"error":{"code":"...","message":"..."}}`
-- Question import/export: JSON format with `{version: 1, questions: [...]}`. Export includes `id`, `created_at`, `updated_at`; import ignores them (extra fields allowed). Image URLs are stored as-is from R2.
+- Question import/export: JSON format with `{version: 1, questions: [...]}`. Export includes `id`, `created_at`, `updated_at`; import ignores them (extra fields allowed). Image URLs are stored as produced by the configured storage backend.
+- When the user asks to commit or submit MikanQuiz changes to GitHub, include the requested source changes and the rebuilt `web/frontend/dist/` assets so a server-side `git pull` receives deployable frontend files. Preserve unrelated worktree changes.
 
 ## Common Pitfalls
 
 - Backend must have `.venv` created and activated before running
 - Database migrations must run before starting backend (`alembic upgrade head`)
 - Web frontend proxies `/api` to backend in dev mode
+- Local image storage is for development only; do not expose its upload directory as a production public store
 - When adding admin API routes with static paths under `/admin/questions/` (e.g. `/export`, `/import`), register them **before** `{question_id}` routes, or use `{question_id:int}` path pattern to prevent routing conflicts

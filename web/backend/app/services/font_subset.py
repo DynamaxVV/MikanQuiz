@@ -6,18 +6,28 @@ import logging
 from pathlib import Path
 from tempfile import gettempdir
 
-from app.errors import ApiError
 from app.logging import log_event
+
+_FONTTOOLS_AVAILABLE = False
+_IMPORT_ERROR = None
 
 try:
     from fontTools import subset
     from fontTools.ttLib import TTFont
     _FONTTOOLS_AVAILABLE = True
-except ImportError:
+except Exception as exc:
     _FONTTOOLS_AVAILABLE = False
+    _IMPORT_ERROR = str(exc)
 
 
 _CACHE_DIR = Path(gettempdir()) / "mikanquiz-font-subsets"
+
+
+def get_subset_status() -> dict:
+    return {
+        "fonttools_available": _FONTTOOLS_AVAILABLE,
+        "import_error": _IMPORT_ERROR,
+    }
 
 
 def subset_font_to_woff2(font_bytes: bytes, text: str) -> bytes:
@@ -25,7 +35,11 @@ def subset_font_to_woff2(font_bytes: bytes, text: str) -> bytes:
 
     If fonttools is unavailable or subsetting fails gracefully, returns the original bytes.
     """
-    if not _FONTTOOLS_AVAILABLE or not text.strip():
+    if not _FONTTOOLS_AVAILABLE:
+        log_event("font_subset_unavailable", logging.WARNING, error=_IMPORT_ERROR)
+        return font_bytes
+
+    if not text.strip():
         return font_bytes
 
     cache_key = hashlib.sha256(font_bytes).hexdigest()[:16]

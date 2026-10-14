@@ -3,17 +3,16 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-08-24
+- Last refreshed: 2026-09-22
 - Primary product surfaces: PC Web 答题端、PC Web 管理端、Web 专属嵌字笔记
 - Supporting architecture: [`docs/WEB_ARCHITECTURE_ZH.md`](docs/WEB_ARCHITECTURE_ZH.md)
 - Evidence reviewed:
   - [`README.md`](README.md)
-  - [`miniprogram/pages/index/index.wxml`](miniprogram/pages/index/index.wxml) 与 [`index.wxss`](miniprogram/pages/index/index.wxss)
-  - [`miniprogram/pages/level/level.wxml`](miniprogram/pages/level/level.wxml) 与 [`level.wxss`](miniprogram/pages/level/level.wxss)
-  - [`miniprogram/pages/quiz/quiz.wxml`](miniprogram/pages/quiz/quiz.wxml) 与 [`quiz.wxss`](miniprogram/pages/quiz/quiz.wxss)
-  - `miniprogram/pages/admin*` 下的登录、题库、题目编辑、详情和设置页面
-  - [`miniprogram/images/hero-title-hanzipen.png`](miniprogram/images/hero-title-hanzipen.png)
-- Evidence limits: 仓库中没有设计稿、截图基线或既有 Web 组件；本文件以当前小程序源码和标题资产为视觉事实，以已确认的 PC 使用场景为布局依据。
+  - [`docs/acceptance/WEB_VISUAL_BASELINES.md`](docs/acceptance/WEB_VISUAL_BASELINES.md) 及其截图基线
+  - [`web/frontend/src/pages/QuizPage.vue`](web/frontend/src/pages/QuizPage.vue)、[`web/frontend/src/components/AdminShell.vue`](web/frontend/src/components/AdminShell.vue)
+  - [`web/frontend/src/pages/FontReferencePage.vue`](web/frontend/src/pages/FontReferencePage.vue) 与管理员嵌字笔记页面
+  - [`miniprogram/images/hero-title-hanzipen.png`](miniprogram/images/hero-title-hanzipen.png)（仅作为冻结客户端的品牌参考）
+- Evidence limits: 本文件描述当前 PC Web 的设计合同；视觉截图是历史验收基线，不等同于生产环境验收。小程序源码只作为兼容客户端和品牌历史参考。
 
 本文件是 PC Web 实现与评审的设计合同。实现中若出现与本文件冲突的设计决策，应先更新本文件，再修改界面。
 
@@ -25,7 +24,7 @@
   - 米白底色和陶土橙主操作色。
   - 白色圆角卡片、暖色浅边框和克制阴影。
   - 首页继续使用现有手写标题图片，不用运行时字体仿制。
-  - “新手级 / 熟练级 / 挑战级”、星级难度、A–D 圆形选项标记和当前中文文案。
+  - “新手级 / 熟练级 / 挑战级”、星级难度、按字体分区显示的选项和当前中文文案。
 - Avoid:
   - 紫蓝色 SaaS 后台、纯黑科技风或冷灰企业后台。
   - 到处使用毛玻璃、渐变、悬浮球、彩色图标和装饰性动画。
@@ -94,11 +93,10 @@
 2. 新增题目
 3. 出题策略
 4. 字体快捷项
-5. 提交记录
-6. 配置迁移
-7. 退出登录
+5. 嵌字笔记
+6. 退出登录
 
-账号创建、停用、恢复和改密不出现在导航中，由服务器 CLI 负责。
+提交记录和配置迁移仍保留为可直接访问的工具页面，但不进入主导航；账号创建、停用、恢复和改密不出现在导航中，由服务器 CLI 负责。
 
 ### Content hierarchy
 
@@ -160,10 +158,10 @@
 ┌──────────────────────────────────────────────────────────────┐
 │ ← 退出练习        新手级 · 第 3 / 10 题       进度条          │
 ├──────────────────────────────┬───────────────────────────────┤
-│ 第 3 题 · ★★★                │ A  选项文本                    │
-│ 请选择以下……                 │ B  选项文本                    │
-│                              │ C  选项文本                    │
-│ ┌──────────────────────────┐ │ D  选项文本                    │
+│ 第 3 题 · ★★★                │ 类黑                         │
+│ 请选择以下……                 │ [字体选项] [字体选项]           │
+│                              │ 宋体                         │
+│ ┌──────────────────────────┐ │ [字体选项] [字体选项]           │
 │ │         题目图片          │ │                               │
 │ │      点击查看原图         │ │ [上一题]             [下一题] │
 │ └──────────────────────────┘ │                               │
@@ -172,9 +170,9 @@
 
 - 左侧 7 列：题号、星级、题干和图片；图片容器最大高度 `min(62vh, 620px)`。
 - 右侧 5 列：选项、上一题/下一题或提交按钮；在视口内 sticky，但不遮挡页脚。
-- 选项最小高度 `64px`，整行可点击；A–D 标记保持圆形。
-- 选择后立刻更新边框、底色和标记，不等待网络请求。
-- 支持 `A`–`D` 或 `1`–`4` 选择、左右方向键换题；焦点在输入控件中时不触发快捷键。
+- 选项按字体分区显示为可点击按钮；保持足够的点击区域和明确的选中边框，不依赖固定的 A–D 四项布局。
+- 选择后立刻更新边框和底色，不等待网络请求。
+- 左右方向键切换题目；焦点位于输入框、文本域、选择框或可编辑区域时不触发答题快捷键。
 - 未完成全部题目时，“提交”保持可点击但触发就地提示缺少的题号；不要只用 disabled 状态隐藏原因。
 - 离开未提交答题不需要确认；答题页底部提供“重新开始本次练习”，清除本地进度后回到难度选择。
 
@@ -189,8 +187,8 @@
 
 - 嵌字笔记是 Web 专属公开页面，内容由管理员维护。
 - 左侧 `280px` 缩略图/标题列表，右侧展示当前大图和说明。
-- 图片条目来自 TypeScript 静态配置：`id`、`title`、`thumbnailUrl`、`imageUrl`、可选 `description`。
-- 支持标题关键词过滤；条目很少时不增加分类、标签和后台 CRUD。
+- 图片条目来自公开 API，按管理员维护的分区返回；卡片包含 `title`、`imageUrl`、`note` 和 `difficulty` 等字段。
+- 管理员在“嵌字笔记管理”页面上传、排序、编辑和删除分区及卡片；公开页支持标题关键词和星级过滤。
 - 点击大图使用原生 `<dialog>` 打开查看器；`Esc` 关闭，焦点返回触发元素。
 
 ### Admin shell
@@ -226,14 +224,14 @@
 - 左侧 7 列为表单，右侧 5 列为 sticky 答题卡预览。
 - 表单顺序：题干 → 难度 → 图片 URL/上传入口 → 选项 → 正确答案 → 解析。
 - 字体快捷项紧邻当前获得焦点的选项输入区；点击后直接替换该选项并保持焦点。
-- 图片上传协议未确定前，UI 使用“图片 URL + 预览”；未来上传控件替换输入方式，不改变 `imageUrl` 数据字段。
+- 选择或粘贴图片后先保留浏览器生成的 `blob:` 预览；保存题目时由 FastAPI 上传到配置的 R2 或 local 存储后端，数据库只保存返回的公开 URL，浏览器不接触存储凭据。
 - 保存按钮固定在表单末端，并支持 `Cmd/Ctrl + S`。
 - 有未保存修改时离开页面必须确认；保存期间按钮显示明确进度并防止重复提交。
 - 服务端校验错误映射到对应字段，页面顶部只显示摘要，不让用户猜哪个字段失败。
 
 ### Settings and submissions
 
-- “出题策略”“字体快捷项”“提交记录”拆为三个导航页面，不挤在同一长页。
+- “出题策略”“字体快捷项”“提交记录”拆为三个独立页面，不挤在同一长页。
 - “配置迁移”桌面端采用 `01 导入配置 / 02 预览确认` 双栏工作区，窄屏切换为单列；标题区只保留页面标题和全量导出入口。第一栏选择完整配置或设置配置，第二栏查看只读差异预览并进行 hash 绑定确认。右上角的完整配置导出包含题库；第一栏的设置配置导出不含题库，设置导入明确保留当前题库。页面下方另设“题库导入与导出”工具，支持题库 JSON 导出和追加式导入，明确显示“仅追加 · 不覆盖”、导入统计与失败原因；不使用含义不清的 `QB` 图标或箭头装饰。
 - 出题策略使用三行 × 五星的可编辑矩阵；每行显示权重合计和至少一个非零值的校验状态。
 - 字体快捷项使用逐项 chip 编辑，同时保留粘贴多行文本后解析的快捷入口。
@@ -312,7 +310,7 @@
 
 - Existing assets to reuse:
   - `hero-title-hanzipen.png`。
-  - 当前难度名称、星级和 A–D 选项语义。
+  - 当前难度名称、星级和按字体分区的选项语义。
   - 当前暖色配色与卡片轮廓作为 token 来源。
 - New/changed components:
   - `PublicShell`, `AdminShell`, `BrandHeader`。
@@ -343,7 +341,7 @@
   - 题目图片加载失败时显示替代文字与重试入口。
 - Screen-reader semantics:
   - 页面只有一个 `h1`；分区按层级使用原生标题。
-  - 答案使用 radio group 语义；题号更新通过克制的 live region 宣告。
+  - 答案区域使用带标签的分组和原生可聚焦按钮；按钮通过 `aria-pressed` 暴露当前选中状态，题号更新通过克制的 live region 宣告。
   - 表格使用真实 `table`、表头和分页标签。
 - Reduced motion and sensory considerations:
   - `prefers-reduced-motion: reduce` 下移除位移和缩放，只保留不超过 `150ms` 的淡入淡出或静态切换。
@@ -401,8 +399,8 @@
   - 管理端组件按路由拆包；公开答题端不加载整套后台组件。
 - Compatibility constraints:
   - 支持当前稳定版 Chrome、Edge、Safari 和 Firefox。
-  - 主体验为 PC 横屏；Web 手机布局只保证功能完整，小程序仍是主要移动端。
-  - 外部图片只允许 HTTPS；图床直链规则另行确认。
+  - 主体验为 PC 横屏；Web 手机布局只保证功能完整，小程序是冻结的兼容客户端。
+  - 生产外部图片使用 HTTPS；R2/local 存储模式和本地 URL 规则见后端配置文档。
 - Test/screenshot expectations:
   - 实现后至少保存 1440×900 的首页、难度、答题、结果、题库、题目编辑和嵌字笔记截图基线。
   - 额外验证 1024px、768px、200% 缩放、键盘-only、减少动态效果和图片失败状态。
@@ -410,10 +408,10 @@
 
 ## Open questions
 
-- [ ] 确定 `pan.yurucamp.cn` 的上传协议、稳定直链格式、重定向和防盗链规则 / owner: 项目方 / impact: 题目编辑图片控件与迁移工具
-- [ ] 提供嵌字笔记首批图片、标题和排列顺序 / owner: 项目方 / impact: `/font-reference` 卡片内容
 - [ ] 确定正式 Web/API 域名及备案中转拓扑 / owner: 运维 / impact: 环境配置、CSP 和小程序合法域名
-- [ ] Web 原型完成后确认 1440×900 视觉基线 / owner: 项目方 / impact: 进入正式 UI 实现与视觉验收
+- [ ] 确认生产 R2 公共域名、字体跨域策略和真实图片可达性 / owner: 运维 / impact: 图片上传、字体即时渲染和部署验收
+- [ ] 提供或确认嵌字笔记首批图片、标题和排列顺序 / owner: 项目方 / impact: `/font-reference` 初始内容
+- [ ] 确认 OSS 备份 bucket、凭证注入方式和生命周期策略 / owner: 运维 / impact: 备份与恢复演练
 
 ## 批量制题工作区（2026-09-09）
 

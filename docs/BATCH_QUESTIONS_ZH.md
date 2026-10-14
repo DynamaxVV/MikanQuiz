@@ -57,6 +57,7 @@ cd web/backend
 ```sh
 cd web/frontend
 npm run test:batch-core
+npm run test:api-contract
 npm run build
 ```
 
@@ -75,7 +76,7 @@ Playwright 位于外部工具目录时用 `NODE_PATH` 指向其 `node_modules`�
 
 真实性验收边界：合成浏览器测试与后端 API 测试不替代真实内容验收；生产部署、目标域名和 R2 仍需单独验证。
 
-现有 `npm run test:api-contract` 中对 `QuizPage.vue` 的 `moveAnswer` 断言与当前答题页不匹配；本功能未修改该答题页或该旧断言，需作为既有检查缺口单独处理。
+`npm run test:api-contract` 当前检查客户端会话、上传、答题页选项分区和左右方向键切题等稳定契约；它不替代真实浏览器交互验收。
 
 ### 自动化基线验证记录（2026-09-09）
 

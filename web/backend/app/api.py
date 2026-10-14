@@ -233,21 +233,30 @@ async def stream_font(
     raw_content = resp.content
     image_service.validate_font(raw_content, content_type)
 
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=31536000, immutable",
+    }
     if text and text.strip():
-        from app.services.font_subset import subset_font_to_woff2
+        from app.services.font_subset import subset_font_to_woff2, get_subset_status
+        status = get_subset_status()
+        headers["X-Font-Subset-Available"] = str(status["fonttools_available"])
+        if status.get("import_error"):
+            headers["X-Font-Subset-Error"] = status["import_error"][:100]
+
         content = await run_in_threadpool(subset_font_to_woff2, raw_content, text.strip())
         if content.startswith(b"wOF2"):
             content_type = "font/woff2"
+            headers["X-Font-Subset"] = "hit"
+        else:
+            headers["X-Font-Subset"] = "fallback"
     else:
         content = raw_content
 
     return Response(
         content=content,
         media_type=content_type,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=31536000, immutable",
-        },
+        headers=headers,
     )
 
 
