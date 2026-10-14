@@ -35,6 +35,8 @@ async def prewarm() -> None:
 
     async with httpx.AsyncClient(timeout=30) as client:
         success = 0
+        fallback = 0
+        failed = 0
         for idx, (name, url) in enumerate(targets, 1):
             if get_cached_subset(url, name):
                 print(f"[{idx}/{len(targets)}] {name}: 已在缓存中，跳过")
@@ -44,15 +46,20 @@ async def prewarm() -> None:
                 print(f"[{idx}/{len(targets)}] {name}: 正在下载并切片...", end=" ", flush=True)
                 raw_bytes, _ = await get_or_fetch_raw_font(url, client)
                 res = subset_font_to_woff2(raw_bytes, name, url)
-                if res.startswith(b"wOF2"):
+                if res.startswith(b"wOF2") and get_cached_subset(url, name) is not None:
                     print(f"完成 ({len(res)} 字节)")
                     success += 1
                 else:
-                    print("切片未生成 WOFF2")
+                    print("没有可复用的 WOFF2 缓存，运行时将处理原字体")
+                    fallback += 1
             except Exception as e:
                 print(f"失败: {e}")
+                failed += 1
 
-    print(f"\n预热完成！成功预热 {success}/{len(targets)} 个字体。")
+    print(
+        f"\n预热结束：缓存切片 {success} 个，原字体回退或未缓存 {fallback} 个，"
+        f"失败 {failed} 个（共 {len(targets)} 个字体）。"
+    )
 
 
 if __name__ == "__main__":

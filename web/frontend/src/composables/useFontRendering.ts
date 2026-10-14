@@ -8,6 +8,8 @@ const fontStates = ref(new Map<string, FontStatus>());
 const fontFamilies = new Map<string, string>();
 const fontError = ref('');
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+// Bump when changing the server's font subset output so browsers discard cached files.
+const FONT_STREAM_CACHE_VERSION = 2;
 
 // Limit concurrent font downloads in browser to prevent request congestion
 const MAX_CONCURRENT_LOADS = 4;
@@ -42,7 +44,7 @@ function familyFor(url: string, text?: string): string {
 async function doLoadFont(option: Pick<FontOption, 'fontUrl' | 'name'>, cacheKey: string, family: string): Promise<void> {
   const text = option.name?.trim() || '';
   try {
-    let proxyUrl = `${API_BASE}/fonts/stream?url=${encodeURIComponent(option.fontUrl!)}`;
+    let proxyUrl = `${API_BASE}/fonts/stream?v=${FONT_STREAM_CACHE_VERSION}&url=${encodeURIComponent(option.fontUrl!)}`;
     if (text) {
       proxyUrl += `&text=${encodeURIComponent(text)}`;
     }
