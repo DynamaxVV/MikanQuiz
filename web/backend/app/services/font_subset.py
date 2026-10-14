@@ -21,6 +21,7 @@ except Exception as exc:
 
 
 _CACHE_DIR = Path(gettempdir()) / "mikanquiz-font-subsets"
+_RAW_CACHE_DIR = Path(gettempdir()) / "mikanquiz-raw-fonts"
 
 
 def get_subset_status() -> dict:
@@ -83,3 +84,28 @@ def subset_font_to_woff2(font_bytes: bytes, text: str) -> bytes:
     except Exception as exc:
         log_event("font_subset_fallback", logging.WARNING, error=str(exc))
         return font_bytes
+
+async def get_or_fetch_raw_font(url: str, client) -> tuple[bytes, str]:
+    """Cache downloaded raw fonts on local disk to avoid repeated 17MB downloads from R2."""
+    _RAW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+    raw_path = _RAW_CACHE_DIR / f"{url_hash}.bin"
+    meta_path = _RAW_CACHE_DIR / f"{url_hash}.type"
+
+    if raw_path.is_file() and meta_path.is_file():
+        try:
+            return raw_path.read_bytes(), meta_path.read_text("utf-8").strip()
+        except OSError:
+            pass
+
+    resp = await client.get(url)
+    resp.raise_for_status()
+    content_type = resp.headers.get("content-type", "font/ttf").split(";", 1)[0]
+
+    try:
+        raw_path.write_bytes(resp.content)
+        meta_path.write_text(content_type, "utf-8")
+    except OSError:
+        pass
+
+    return resp.content, content_type

@@ -223,14 +223,12 @@ async def stream_font(
     base = settings.r2_public_base_url.rstrip("/")
     if not url.startswith(base + "/") and url != base:
         raise ApiError(400, "INVALID_FONT_URL", "字体地址无效")
+    from app.services.font_subset import subset_font_to_woff2, get_subset_status, get_or_fetch_raw_font
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+            raw_content, content_type = await get_or_fetch_raw_font(url, client)
     except httpx.HTTPError as error:
         raise ApiError(502, "FONT_FETCH_FAILED", "字体文件加载失败，请稍后重试") from error
-    content_type = resp.headers.get("content-type", "font/ttf").split(";", 1)[0]
-    raw_content = resp.content
     image_service.validate_font(raw_content, content_type)
 
     headers = {

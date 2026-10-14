@@ -9,6 +9,21 @@ const fontFamilies = new Map<string, string>();
 const fontError = ref('');
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
 
+// Limit concurrent font downloads in browser to prevent request congestion
+const MAX_CONCURRENT_LOADS = 4;
+let activeLoads = 0;
+const queue: (() => void)[] = [];
+
+function pumpQueue(): void {
+  while (activeLoads < MAX_CONCURRENT_LOADS && queue.length > 0) {
+    const next = queue.shift();
+    if (next) {
+      activeLoads++;
+      next();
+    }
+  }
+}
+
 function setFontState(cacheKey: string, state: FontStatus): void {
   const next = new Map(fontStates.value);
   next.set(cacheKey, state);
@@ -24,19 +39,10 @@ function familyFor(url: string, text?: string): string {
   return family;
 }
 
-async function loadFont(option: Pick<FontOption, 'fontUrl' | 'name'>): Promise<void> {
-  if (!option.fontUrl) return;
+async function doLoadFont(option: Pick<FontOption, 'fontUrl' | 'name'>, cacheKey: string, family: string): Promise<void> {
   const text = option.name?.trim() || '';
-  const cacheKey = text ? `${option.fontUrl}::${text}` : option.fontUrl;
-
-  const current = fontStates.value.get(cacheKey);
-  if (current?.state === 'loading' || current?.state === 'ready') return;
-
-  const family = familyFor(option.fontUrl, text);
-  setFontState(cacheKey, { family, state: 'loading' });
-
   try {
-    let proxyUrl = `${API_BASE}/fonts/stream?url=${encodeURIComponent(option.fontUrl)}`;
+    let proxyUrl = `${API_BASE}/fonts/stream?url=${encodeURIComponent(option.fontUrl!)}`;
     if (text) {
       proxyUrl += `&text=${encodeURIComponent(text)}`;
     }
@@ -47,7 +53,27 @@ async function loadFont(option: Pick<FontOption, 'fontUrl' | 'name'>): Promise<v
     fontError.value = '';
   } catch {
     setFontState(cacheKey, { family, state: 'failed' });
+  } finally {
+    activeLoads--;
+    pumpQueue();
   }
+}
+
+function enqueueFontLoad(option: Pick<FontOption, 'fontUrl' | 'name'>): void {
+  if (!option.fontUrl) return;
+  const text = option.name?.trim() || '';
+  const cacheKey = text ? `${option.fontUrl}::${text}` : option.fontUrl;
+
+  const current = fontStates.value.get(cacheKey);
+  if (current?.state === 'loading' || current?.state === 'ready') return;
+
+  const family = familyFor(option.fontUrl, text);
+  setFontState(cacheKey, { family, state: 'loading' });
+
+  queue.push(() => {
+    void doLoadFont(option, cacheKey, family);
+  });
+  pumpQueue();
 }
 
 export function useFontRendering() {
@@ -56,13 +82,12 @@ export function useFontRendering() {
     const text = option.name?.trim() || '';
     const cacheKey = text ? `${option.fontUrl}::${text}` : option.fontUrl;
     const status = fontStates.value.get(cacheKey);
-    if (!status) void loadFont(option);
+    if (!status) enqueueFontLoad(option);
     return status?.state === 'ready' ? { fontFamily: `'${status.family}', sans-serif` } : {};
   }
 
   function preloadFonts(options: Pick<FontOption, 'fontUrl' | 'name'>[]): void {
-    // Process preload with light batching/queueing
-    options.forEach((option) => { void loadFont(option); });
+    options.forEach((option) => { enqueueFontLoad(option); });
   }
 
   function fontState(option: Pick<FontOption, 'fontUrl' | 'name'>): FontState {
