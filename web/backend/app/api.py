@@ -216,9 +216,10 @@ async def create_feedback(
 @router.get("/fonts/stream")
 async def stream_font(
     url: str = Query(...),
+    text: str | None = Query(default=None),
     settings: AppSettings = Depends(get_app_settings),
 ) -> Response:
-    """Proxy a font file from R2 with CORS headers so @font-face can load cross-origin."""
+    """Proxy a font file from R2 with CORS headers, optionally subsetting to target characters in WOFF2 format."""
     base = settings.r2_public_base_url.rstrip("/")
     if not url.startswith(base + "/") and url != base:
         raise ApiError(400, "INVALID_FONT_URL", "字体地址无效")
@@ -229,9 +230,19 @@ async def stream_font(
     except httpx.HTTPError as error:
         raise ApiError(502, "FONT_FETCH_FAILED", "字体文件加载失败，请稍后重试") from error
     content_type = resp.headers.get("content-type", "font/ttf").split(";", 1)[0]
-    image_service.validate_font(resp.content, content_type)
+    raw_content = resp.content
+    image_service.validate_font(raw_content, content_type)
+
+    if text and text.strip():
+        from app.services.font_subset import subset_font_to_woff2
+        content = await run_in_threadpool(subset_font_to_woff2, raw_content, text.strip())
+        if content.startswith(b"wOF2"):
+            content_type = "font/woff2"
+    else:
+        content = raw_content
+
     return Response(
-        content=resp.content,
+        content=content,
         media_type=content_type,
         headers={
             "Access-Control-Allow-Origin": "*",

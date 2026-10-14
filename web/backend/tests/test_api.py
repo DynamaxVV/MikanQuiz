@@ -528,3 +528,42 @@ def test_catalog_rejects_deleting_protected_groups(client: TestClient) -> None:
             headers=headers,
         )
         assert (response.status_code, response.json()["error"]["code"]) == (403, "OPTION_GROUP_PROTECTED"), f"{name} should be protected"
+
+
+def test_font_stream_subset_woff2(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that stream_font with text query subsets font to WOFF2."""
+    from app.config import AppSettings
+    from app.services.font_subset import subset_font_to_woff2
+
+    client.app.state.settings = AppSettings(
+        database_url=client.app.state.settings.database_url,
+        cookie_secure=False,
+        r2_public_base_url="https://images.example.test",
+    )
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "font/ttf"}
+        content = b"\x00\x01\x00\x00font"
+
+        def raise_for_status(self):
+            pass
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, _: str) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr("app.api.httpx.AsyncClient", lambda **_: FakeClient())
+    monkeypatch.setattr("app.services.images.validate_font", lambda *_: ".ttf")
+    monkeypatch.setattr("app.services.font_subset.subset_font_to_woff2", lambda raw, text: b"wOF2" + raw)
+
+    response = client.get("/api/v1/fonts/stream?url=https%3A%2F%2Fimages.example.test%2Ffont.ttf&text=%E6%B8%85%E7%88%BD")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "font/woff2"
+    assert response.content.startswith(b"wOF2")
