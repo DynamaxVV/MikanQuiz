@@ -258,6 +258,7 @@ def subset_font_to_woff2(font_bytes: bytes, text: str, url: str | None = None) -
         key = f"{cache_key}_{text_key}"
 
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cached_file = _CACHE_DIR / f"{key}.woff2"
     cached = _get_valid_cached_subset(key, clean_text)
     if cached is not None:
         return cached
