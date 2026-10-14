@@ -117,6 +117,9 @@ def export_manifest(session: Session, include_questions: bool = True) -> ConfigM
             "config_key": card.config_key,
             "title": card.title,
             "image_url": card.image_url,
+            "pdf_url": card.pdf_url,
+            "pdf_name": card.pdf_name,
+            "pdf_size_bytes": card.pdf_size_bytes,
             "note": card.note,
             "difficulty": card.difficulty,
             "sort_order": card.sort_order,
@@ -550,6 +553,9 @@ def _upsert_card(
         session.add(card)
     card.title = data.title
     card.image_url = data.image_url
+    card.pdf_url = data.pdf_url
+    card.pdf_name = data.pdf_name
+    card.pdf_size_bytes = data.pdf_size_bytes
     card.note = data.note
     card.difficulty = data.difficulty
     card.section_id = section_id

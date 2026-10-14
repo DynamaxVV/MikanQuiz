@@ -129,6 +129,9 @@ export interface FontReference {
   difficulty: number;
   sortOrder: number;
   createdAt: string;
+  pdfUrl?: string | null;
+  pdfName?: string;
+  pdfSizeBytes?: number;
 }
 
 export interface ConfigDiff {

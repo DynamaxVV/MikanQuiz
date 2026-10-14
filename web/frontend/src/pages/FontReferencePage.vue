@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
+import { formatFileSize } from '@/utils/fileSize';
 import BrandHeader from '@/components/BrandHeader.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import ImageLightbox from '@/components/ImageLightbox.vue';
@@ -98,6 +99,12 @@ onMounted(loadReferences);
                     <img :src="card.imageUrl" :alt="card.title" />
                     <p>{{ card.note || '暂无说明' }}</p>
                   </div>
+                  <div class="card-attachment-slot">
+                    <div v-if="card.pdfUrl" class="pdf-attachment" @click.stop @keydown.enter.stop>
+                      <span :title="card.pdfName">{{ card.pdfName || 'PDF 资料' }}<small v-if="card.pdfSizeBytes"> · {{ formatFileSize(card.pdfSizeBytes) }}</small></span>
+                      <a :href="api.notePdfUrl(card.id)" :download="card.pdfName || '笔记.pdf'" :aria-label="`下载 ${card.pdfName || card.title + ' PDF'}`">下载 PDF ↓</a>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -122,6 +129,10 @@ onMounted(loadReferences);
             <p>{{ selected.note || '暂无说明' }}</p>
           </div>
           <p class="image-hint">双击图片查看原图，可在原图查看器中调整大小</p>
+          <div v-if="selected.pdfUrl" class="pdf-attachment detail-pdf">
+            <span :title="selected.pdfName">{{ selected.pdfName || 'PDF 资料' }}<small v-if="selected.pdfSizeBytes"> · {{ formatFileSize(selected.pdfSizeBytes) }}</small></span>
+            <a :href="api.notePdfUrl(selected.id)" :download="selected.pdfName || '笔记.pdf'" :aria-label="`下载 ${selected.pdfName || selected.title + ' PDF'}`">下载 PDF ↓</a>
+          </div>
         </div>
       </div>
     </Transition>
@@ -147,7 +158,7 @@ onMounted(loadReferences);
 .section-title { margin: 0 0 16px; font-size: 22px; font-weight: 700; color: var(--color-text); padding-bottom: 8px; border-bottom: 2px solid var(--color-border); }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
-.tutorial-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 18px; box-shadow: var(--shadow-card); overflow: hidden; cursor: pointer; transition: transform 160ms ease-out, box-shadow 160ms ease-out; }
+.tutorial-card { display: grid; grid-template-rows: 84px 136px 44px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 18px; box-shadow: var(--shadow-card); overflow: hidden; cursor: pointer; transition: transform 160ms ease-out, box-shadow 160ms ease-out; }
 .tutorial-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
 .tutorial-card:active { transform: scale(0.98); }
 
@@ -159,6 +170,19 @@ onMounted(loadReferences);
 .card-body { display: flex; gap: 16px; padding: 16px 20px 20px; }
 .card-body img { width: 140px; height: 100px; object-fit: cover; border-radius: 10px; flex-shrink: 0; background: var(--color-surface-warm); }
 .card-body p { margin: 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+
+.tutorial-card .card-head { min-width: 0; padding-top: 14px; padding-bottom: 14px; }
+.tutorial-card .card-head h3 { display: -webkit-box; overflow: hidden; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tutorial-card .card-body { min-height: 0; }
+.tutorial-card .card-body p { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.card-attachment-slot { min-width: 0; }
+.pdf-attachment { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 8px; margin: 0 20px; border-top: 1px solid var(--color-border); }
+.pdf-attachment > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); font-size: 11px; }
+.pdf-attachment a { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 32px; padding: 0 2px; color: var(--color-action); font-size: 12px; font-weight: 700; }
+.pdf-attachment a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.detail-pdf { margin: 0 32px 24px; }
+@media (max-width: 767px) { .tutorial-card { grid-template-rows: 76px 116px 40px; } .tutorial-card .card-head h3 { font-size: 16px; } }
+@media (max-width: 480px) { .pdf-attachment { margin-right: 16px; margin-left: 16px; } }
 
 /* Lightbox */
 .lightbox-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 32px; }

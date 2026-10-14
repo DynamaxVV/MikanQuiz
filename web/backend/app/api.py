@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import logging
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 from time import perf_counter
 from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Cookie, Depends, File, Form, Header, Query, Request, Response, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -32,6 +35,7 @@ from app.schemas import (
     ConfigImportResult,
     FontReferenceCatalogUpdate,
     FontReferenceResponse,
+    NotePdfUploadResponse,
     FontReferenceSectionResponse,
     FeedbackResponse,
     FontExplanationCacheResponse,
@@ -294,11 +298,37 @@ def font_reference_response(item: FontReference) -> FontReferenceResponse:
         id=item.id,
         title=item.title,
         image_url=item.image_url,
+        pdf_url=item.pdf_url,
+        pdf_name=item.pdf_name,
+        pdf_size_bytes=item.pdf_size_bytes,
         note=item.note,
         difficulty=item.difficulty,
         sort_order=item.sort_order,
         created_at=as_utc(item.created_at),
     )
+
+
+@router.get("/font-references/{card_id:int}/pdf")
+def download_note_pdf(
+    card_id: int,
+    session: Session = Depends(get_session),
+    settings: AppSettings = Depends(get_app_settings),
+):
+    """Download a published PDF; local paths are confined to upload storage."""
+    card = session.get(FontReference, card_id)
+    if card is None or not card.pdf_url:
+        raise ApiError(404, "PDF_NOT_FOUND", "该笔记没有 PDF 附件")
+    if settings.storage_backend == "local":
+        base_url = settings.local_public_base_url.rstrip("/") + "/"
+        if card.pdf_url.startswith(base_url):
+            base = Path(settings.local_storage_path).resolve()
+            candidate = (base / unquote(card.pdf_url[len(base_url):])).resolve()
+            if candidate.is_relative_to(base) and candidate.is_file():
+                return FileResponse(candidate, media_type="application/pdf", filename=card.pdf_name or "笔记.pdf")
+            raise ApiError(404, "PDF_NOT_FOUND", "PDF 文件不存在")
+    if urlparse(card.pdf_url).scheme != "https":
+        raise ApiError(404, "PDF_NOT_FOUND", "PDF 下载地址不可用")
+    return RedirectResponse(card.pdf_url, status_code=302)
 
 
 @router.get("/font-references", response_model=list[FontReferenceSectionResponse])
@@ -670,6 +700,22 @@ def get_admin_question(
 ) -> QuestionResponse:
     """Return a complete question for editing or read-only preview."""
     return admin_question(session, question_service.get_question(session, question_id))
+
+
+@router.post("/admin/note-pdfs", response_model=NotePdfUploadResponse, status_code=201)
+async def upload_note_pdf(
+    pdf: UploadFile = File(...),
+    _: AdminAuth = Depends(require_admin),
+    settings: AppSettings = Depends(get_app_settings),
+) -> NotePdfUploadResponse:
+    """Upload one optional PDF for a note card."""
+    name = (pdf.filename or "笔记.pdf").replace("\\", "/").split("/")[-1]
+    name = "".join(char for char in name if ord(char) >= 32 and ord(char) != 127).strip()[:251]
+    if not name.lower().endswith(".pdf"):
+        name += ".pdf"
+    content = await pdf.read(image_service.MAX_PDF_BYTES + 1)
+    url = await run_in_threadpool(image_service.upload_pdf, settings, content, pdf.content_type or "", name)
+    return NotePdfUploadResponse(pdf_url=url, pdf_name=name, pdf_size_bytes=len(content))
 
 
 @router.post("/admin/images", response_model=ImageUploadResponse, status_code=201)

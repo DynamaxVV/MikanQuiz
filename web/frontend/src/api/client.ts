@@ -114,6 +114,9 @@ interface RawFontReference {
   difficulty: number;
   sort_order: number;
   created_at: string;
+  pdf_url?: string | null;
+  pdf_name?: string;
+  pdf_size_bytes?: number;
 }
 
 interface RawFontReferenceSection {
@@ -261,6 +264,9 @@ function mapFontReference(item: RawFontReference): FontReference {
     id: String(item.id),
     title: item.title,
     imageUrl: item.image_url,
+    pdfUrl: item.pdf_url ?? null,
+    pdfName: item.pdf_name ?? '',
+    pdfSizeBytes: item.pdf_size_bytes ?? 0,
     note: item.note,
     difficulty: item.difficulty,
     sortOrder: item.sort_order,
@@ -508,6 +514,15 @@ export const api = {
     return request<{ total: number; created: number; failed: number; errors: string[] }>('/admin/questions/import', { method: 'POST', body: JSON.stringify(body) });
   },
 
+  notePdfUrl: (id: string): string => `${API_BASE}/font-references/${encodeURIComponent(id)}/pdf`,
+
+  uploadNotePdf: async (file: File): Promise<{ pdfUrl: string; pdfName: string; pdfSizeBytes: number }> => {
+    const body = new FormData();
+    body.set('pdf', file);
+    const raw = await request<{ pdf_url: string; pdf_name: string; pdf_size_bytes: number }>('/admin/note-pdfs', { method: 'POST', body });
+    return { pdfUrl: raw.pdf_url, pdfName: raw.pdf_name, pdfSizeBytes: raw.pdf_size_bytes };
+  },
+
   getFontReferenceSections: async (): Promise<FontReferenceSection[]> =>
     (await request<RawFontReferenceSection[]>('/admin/font-reference-sections')).map(mapSection),
 
@@ -523,6 +538,9 @@ export const api = {
             id: Number(card.id) || undefined,
             title: card.title,
             image_url: card.imageUrl,
+            pdf_url: card.pdfUrl ?? null,
+            pdf_name: card.pdfName ?? '',
+            pdf_size_bytes: card.pdfSizeBytes ?? 0,
             note: card.note,
             difficulty: card.difficulty,
             sort_order: card.sortOrder,

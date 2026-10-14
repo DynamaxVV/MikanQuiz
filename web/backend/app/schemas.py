@@ -207,7 +207,41 @@ class FeedbackResponse(ApiModel):
     email_status: Literal["sent", "disabled", "failed"]
 
 
-class FontReferenceWrite(ApiModel):
+class NotePdfUploadResponse(ApiModel):
+    pdf_url: str
+    pdf_name: str
+    pdf_size_bytes: int
+
+
+class ReferencePdfFields(ApiModel):
+    """Optional PDF attachment shared by notes and portable configuration."""
+
+    pdf_url: str | None = Field(default=None, max_length=2048)
+    pdf_name: str = Field(default="", max_length=255)
+    pdf_size_bytes: int = Field(default=0, ge=0, le=20 * 1024 * 1024)
+
+    @field_validator("pdf_url", mode="after")
+    @classmethod
+    def validate_pdf_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        parsed = urlparse(value)
+        local = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if not parsed.netloc or not (parsed.scheme == "https" or local):
+            raise ValueError("PDF 地址必须是 HTTPS URL")
+        return value
+
+    @model_validator(mode="after")
+    def normalize_pdf(self):
+        self.pdf_name = self.pdf_name.strip()
+        if self.pdf_url is None:
+            self.pdf_name = ""
+            self.pdf_size_bytes = 0
+        return self
+
+
+class FontReferenceWrite(ReferencePdfFields):
     """One administrator-maintained public font comparison card."""
 
     id: int | None = None
@@ -235,15 +269,16 @@ class FontReferenceWrite(ApiModel):
     @field_validator("image_url", mode="after")
     @classmethod
     def validate_image_url(cls, value: str) -> str:
-        """Only allow externally deliverable HTTPS image URLs."""
+        """Allow HTTPS image URLs and loopback HTTP for local development."""
         value = value.strip()
         parsed = urlparse(value)
-        if parsed.scheme != "https" or not parsed.netloc:
+        local = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if not parsed.netloc or not (parsed.scheme == "https" or local):
             raise ValueError("图片地址必须是 HTTPS URL")
         return value
 
 
-class FontReferenceResponse(ApiModel):
+class FontReferenceResponse(ReferencePdfFields):
     """A public-safe font comparison card record."""
 
     id: int
@@ -364,7 +399,7 @@ class ConfigQuestion(ApiModel):
         return value.strip() if value is not None and value.strip() else None
 
 
-class ConfigReferenceCard(ApiModel):
+class ConfigReferenceCard(ReferencePdfFields):
     """Portable font-reference card, including cards without a section."""
 
     config_key: str = Field(min_length=1, max_length=64)
@@ -392,7 +427,8 @@ class ConfigReferenceCard(ApiModel):
     def validate_card_image_url(cls, value: str) -> str:
         value = value.strip()
         parsed = urlparse(value)
-        if parsed.scheme != "https" or not parsed.netloc:
+        local = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if not parsed.netloc or not (parsed.scheme == "https" or local):
             raise ValueError("图片地址必须是 HTTPS URL")
         return value
 

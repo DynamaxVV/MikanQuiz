@@ -2,19 +2,21 @@
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '@/api/client';
+import { formatFileSize } from '@/utils/fileSize';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import AdminShell from '@/components/AdminShell.vue';
 import ErrorPanel from '@/components/ErrorPanel.vue';
 import type { FontReference, FontReferenceSection } from '@/types';
 
 const sections = ref<FontReferenceSection[]>([]);
-const { markSaved } = useUnsavedGuard(() => sections.value.map((s) => ({ id: s.id, name: s.name, sortOrder: s.sortOrder, cards: s.cards.map((c) => ({ id: c.id, title: c.title, imageUrl: c.imageUrl, note: c.note, difficulty: c.difficulty, sortOrder: c.sortOrder })) })));
+const { markSaved } = useUnsavedGuard(() => sections.value.map((s) => ({ id: s.id, name: s.name, sortOrder: s.sortOrder, cards: s.cards.map((c) => ({ id: c.id, title: c.title, imageUrl: c.imageUrl, pdfUrl: c.pdfUrl, pdfName: c.pdfName, pdfSizeBytes: c.pdfSizeBytes, note: c.note, difficulty: c.difficulty, sortOrder: c.sortOrder })) })));
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
 const draggedCard = ref<{ sectionIndex: number; cardIndex: number } | null>(null);
 const draggedSection = ref<number | null>(null);
 const uploading = ref(false);
+const uploadingPdf = ref<FontReference | null>(null);
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
@@ -177,6 +179,34 @@ function onPaste(event: ClipboardEvent, card: FontReference): void {
   }
 }
 
+async function onPdfInput(event: Event, card: FontReference): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.pdf') || file.size > 20 * 1024 * 1024) {
+    ElMessage.error('请选择 20MB 以内的 PDF 文件');
+    return;
+  }
+  uploading.value = true;
+  uploadingPdf.value = card;
+  try {
+    Object.assign(card, await api.uploadNotePdf(file));
+    ElMessage.success('PDF 已上传，保存后用户即可下载');
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : 'PDF 上传失败');
+  } finally {
+    uploading.value = false;
+    uploadingPdf.value = null;
+  }
+}
+
+function removePdf(card: FontReference): void {
+  card.pdfUrl = null;
+  card.pdfName = '';
+  card.pdfSizeBytes = 0;
+}
+
 async function save(): Promise<void> {
   saving.value = true;
   error.value = '';
@@ -250,6 +280,19 @@ onMounted(() => { void load(); });
                 <p class="editor-label">编辑内容</p>
                 <label>标题<input v-model="card.title" maxlength="100" placeholder="例如：细宋体笔画收尾" /></label>
                 <label>说明<textarea v-model="card.note" maxlength="500" rows="2" placeholder="笔记内容（可选）" /></label>
+                <div class="pdf-field">
+                  <span>PDF 资料（可选）</span>
+                  <div v-if="card.pdfUrl" class="pdf-file">
+                    <a :href="card.pdfUrl" target="_blank" rel="noopener noreferrer" :title="card.pdfName">{{ card.pdfName || '笔记.pdf' }}</a>
+                    <small v-if="card.pdfSizeBytes">{{ formatFileSize(card.pdfSizeBytes) }}</small>
+                    <button type="button" :disabled="saving || uploading" @click="removePdf(card)">移除</button>
+                  </div>
+                  <label class="pdf-upload" :class="{ disabled: saving || uploading }">
+                    {{ uploadingPdf === card ? '正在上传…' : card.pdfUrl ? '替换 PDF' : '上传 PDF' }}
+                    <input type="file" accept=".pdf,application/pdf" :aria-label="`${card.title || '卡片'}的 PDF 资料`" :disabled="saving || uploading" @change="onPdfInput($event, card)" />
+                  </label>
+                  <small>PDF，最大 20MB；配图请在左侧上传。</small>
+                </div>
                 <label class="difficulty-label">难度
                   <div class="difficulty-picker">
                     <button v-for="star in 3" :key="star" type="button" :class="{ active: card.difficulty >= star }" @click="card.difficulty = star">{{ '★' }}</button>
@@ -262,6 +305,7 @@ onMounted(() => { void load(); });
                 <div class="preview-copy">
                   <strong>{{ card.title || '未命名卡片' }}</strong>
                   <p>{{ card.note || '暂无说明' }}</p>
+                  <span v-if="card.pdfUrl" class="preview-pdf">↓ 下载 PDF</span>
                   <span aria-label="难度">{{ '★'.repeat(card.difficulty) }}{{ '☆'.repeat(3 - card.difficulty) }}</span>
                 </div>
               </aside>
@@ -340,4 +384,14 @@ onMounted(() => { void load(); });
   .card-read-preview .preview-copy { grid-column: 1; grid-row: 2; }
   .save-bar button { width: 100%; }
 }
+.pdf-field { display: grid; gap: 6px; color: var(--color-text-muted); font-size: 12px; }
+.pdf-file { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pdf-file a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-action); text-decoration: underline; }
+.pdf-file small, .pdf-file button { flex-shrink: 0; }
+.pdf-file button { border: 0; background: transparent; color: var(--color-danger); padding: 4px; }
+.pdf-upload { position: relative; justify-self: start; overflow: hidden; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 12px; color: var(--color-action); background: var(--color-surface-warm); }
+.pdf-upload input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.pdf-upload:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.pdf-upload.disabled { opacity: .6; }
+.preview-pdf { color: var(--color-action); font-size: 12px; font-weight: 700; }
 </style>

@@ -359,6 +359,9 @@ def replace_font_reference_catalog(session: Session, payload: FontReferenceCatal
                 session.add(FontReference(
                     title=card_data.title.strip(),
                     image_url=card_data.image_url.strip(),
+                    pdf_url=card_data.pdf_url,
+                    pdf_name=card_data.pdf_name,
+                    pdf_size_bytes=card_data.pdf_size_bytes,
                     note=card_data.note.strip(),
                     difficulty=card_data.difficulty,
                     section_id=section.id,
@@ -367,6 +370,9 @@ def replace_font_reference_catalog(session: Session, payload: FontReferenceCatal
             else:
                 card.title = card_data.title.strip()
                 card.image_url = card_data.image_url.strip()
+                card.pdf_url = card_data.pdf_url
+                card.pdf_name = card_data.pdf_name
+                card.pdf_size_bytes = card_data.pdf_size_bytes
                 card.note = card_data.note.strip()
                 card.difficulty = card_data.difficulty
                 card.section_id = section.id

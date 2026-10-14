@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired, run
 from tempfile import NamedTemporaryFile
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -15,6 +15,7 @@ from app.errors import ApiError
 from app.logging import log_event
 
 
+MAX_PDF_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGES = {"image/jpeg": (".jpg", b"\xff\xd8\xff"), "image/png": (".png", b"\x89PNG\r\n\x1a\n"), "image/gif": (".gif", b"GIF8"), "image/webp": (".webp", b"RIFF")}
 MAX_FONT_BYTES = 40 * 1024 * 1024
@@ -102,13 +103,15 @@ def upload_json(settings: AppSettings, key: str, data: dict | list) -> str:
         return run_uploader(settings, f.name, "application/json", key=key, cache_control="no-cache")
 
 
-def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: str | None = None, cache_control: str | None = None) -> str:
+def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: str | None = None, cache_control: str | None = None, content_disposition: str | None = None) -> str:
     """Invoke the local adapter and expose only its JSON public URL result."""
     payload: dict[str, object] = {"filePath": file_path, "contentType": content_type, "endpoint": settings.r2_endpoint, "accessKeyId": settings.r2_access_key_id, "secretAccessKey": settings.r2_secret_access_key, "bucket": settings.r2_bucket, "publicBaseUrl": settings.r2_public_base_url}
     if key is not None:
         payload["key"] = key
     if cache_control is not None:
         payload["cacheControl"] = cache_control
+    if content_disposition is not None:
+        payload["contentDisposition"] = content_disposition
     try:
         result = run(["node", str(UPLOADER)], input=json.dumps(payload), check=True, capture_output=True, text=True, timeout=30)
         return json.loads(result.stdout)["imageUrl"]
@@ -119,6 +122,22 @@ def run_uploader(settings: AppSettings, file_path: str, content_type: str, key: 
             error_type=type(error).__name__,
         )
         raise ApiError(502, "IMAGE_UPLOAD_FAILED", "图片上传失败，请稍后重试") from error
+
+
+def upload_pdf(settings: AppSettings, content: bytes, content_type: str, filename: str) -> str:
+    """Store a bounded PDF as a downloadable note attachment."""
+    if len(content) > MAX_PDF_BYTES or not content.startswith(b"%PDF-") or content_type.lower() not in {"application/pdf", "application/octet-stream"}:
+        raise ApiError(422, "INVALID_PDF", "仅支持 20MB 以内的 PDF 文件")
+    if settings.storage_backend == "local":
+        return write_local(settings, content, "notes-pdfs", ".pdf")
+    ensure_configured(settings)
+    with NamedTemporaryFile(suffix=".pdf") as document:
+        document.write(content)
+        document.flush()
+        return run_uploader(
+            settings, document.name, "application/pdf", key=f"notes-pdfs/{_random_key()}.pdf",
+            content_disposition=f"attachment; filename*=UTF-8''{quote(filename, safe='')}",
+        )
 
 
 def upload_font(settings: AppSettings, content: bytes, content_type: str, filename: str = "font") -> str:

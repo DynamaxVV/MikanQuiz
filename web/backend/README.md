@@ -270,3 +270,12 @@ Web 登录只返回：
 部署 Nginx 时，`../deploy/nginx.http.conf.example` 必须安装到由主配置 `http {}` 引入的位置（Ubuntu 默认可用 `/etc/nginx/conf.d/`）；`../deploy/nginx.conf.example` 才是 `sites-enabled` 的 `server {}` 文件。还要将 `nginx.proxy-headers.conf.example` 安装为 `/etc/nginx/snippets/quiz-proxy-headers.conf`。填写真实备案中转 IP/CIDR 的 `set_real_ip_from` 后，样例会覆盖任何客户端伪造的 `X-Forwarded-For`，只将可信 `$remote_addr` 转发给应用。部署前运行 `nginx -t`；本机没有 Nginx 时可先执行 `python web/deploy/verify_nginx_example.py` 做静态检查。
 
 迁移历史提交时，`answers` 中必须含完整历史快照：`questionId`、`selected`、`isCorrect`、`correctAnswer`、`questionText`、`imageUrl`（可为空）、`options`（四项）和 `explanation`；提交本身还必须含 `score`、`correctCount`、`total`、`submittedAt`。脚本只使用这些导出值写入历史，并验证它们彼此一致。旧导出若只含 `selected/isCorrect` 会安全失败，绝不使用当前题库的答案、解析、选项或图片反推历史。
+
+
+### 嵌字笔记 PDF 附件
+
+每张笔记继续保留一张必需配图，可附一个 PDF。管理员通过 `POST /api/v1/admin/note-pdfs` 上传 multipart 字段 `pdf`，上限 20MB，服务端检查文件类型与 PDF 文件头。返回 `pdf_url`、`pdf_name`、`pdf_size_bytes`，随后随笔记目录一起保存。替换或移除附件在保存目录后生效，不立即删除旧存储对象。
+
+用户通过 `GET /api/v1/font-references/{card_id}/pdf` 下载。R2 对象带 `Content-Disposition: attachment` 和原文件名；本地模式由后端限制在上传目录内读取并返回下载响应。附件信息同时包含在配置导入导出与笔记同步 JSON 中，旧配置缺少这些字段时视为无附件。
+
+更新后从 `web/backend` 执行 `.venv/bin/alembic upgrade head`，应用迁移 `20261014_0016`，再重启后端。反向代理上传上限须大于 20MB（示例 Nginx 的全局上限为 40MB）。
