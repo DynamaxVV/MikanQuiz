@@ -1,8 +1,55 @@
 # MikanQuiz
 
-![MikanQuiz Web 首页插画](web/frontend/src/assets/mascot-study-with-bg.png)
+<p align="center">
+  <img src="web/frontend/src/assets/mascot-study-with-bg.png" alt="MikanQuiz Web 首页插画" width="360">
+</p>
 
 砂糖的秘密小课堂：面向汉字与字体学习的 Web 答题系统，使用 Vue 3、FastAPI 和 SQLite。支持匿名答题、字体预览、错题解析、嵌字笔记，以及管理员批量制题和配置导入导出。
+
+## 功能介绍
+
+### 答题练习
+
+- 无需注册即可开始答题，昵称可选，按难度选择练习内容。
+- 对照题图辨认汉字字体；答题时可预览字体，提交后查看结果和题目解析。
+- 同一设备会暂存未完成的答题进度，方便稍后继续。
+
+### 嵌字笔记
+
+- 浏览公开的嵌字资料，按难度筛选或搜索标题。
+- 查看资料配图并下载对应 PDF。
+
+### 管理后台
+
+- 筛选、查看和编辑题目，也可以从漫画页面批量框选题图、连续制题和分批入库。
+- 管理员可维护字体分区、快捷字体项、出题策略、嵌字笔记和 PDF 资料。
+- 查看答题提交与题库统计；支持题库 JSON 导入导出，以及带校验预览的完整配置备份与恢复。
+- 批量制题草稿保存在当前浏览器，可在页面刷新后继续编辑；正式入库时才上传裁切后的题图。
+
+## 技术栈
+
+| 部分 | 技术 |
+| --- | --- |
+| 前端 | Vue 3、TypeScript、Vite、Vue Router；管理界面使用 Element Plus，答题页面为自定义 UI |
+| 后端 | Python、FastAPI、SQLAlchemy、Alembic |
+| 数据库 | SQLite（WAL），数据库结构通过 Alembic 迁移管理 |
+| 字体处理 | FontTools、Brotli；提供题目字体预览与字体资料 |
+| 图片存储 | 开发环境可使用本地存储；生产环境使用 Cloudflare R2 和 Node.js AWS SDK 适配器 |
+| 部署 | Nginx、systemd；部署、备份和维护说明见下文手册 |
+
+## 界面预览
+
+### 首页
+
+<p align="center">
+  <img src="docs/images/readme-home.png" alt="MikanQuiz Web 首页" width="960">
+</p>
+
+### 管理页
+
+<p align="center">
+  <img src="docs/images/readme-admin.png" alt="MikanQuiz Web 管理页" width="960">
+</p>
 
 ## 项目组成
 

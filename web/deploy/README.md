@@ -4,6 +4,31 @@
 
 以下命令供部署者在目标服务器执行；仓库检查通过不代表已完成真实服务器部署验收。示例域名 `quiz.example.com`、图片域名 `images.example.com`、R2 凭据和备份文件名都必须替换。
 
+## 现有服务器的更新脚本
+
+[update-existing-server.sh](update-existing-server.sh) 专门适配目前提供的旧部署布局，与下文新安装的 `/srv/quiz/current` 布局不同，不会改写现有 systemd 或 Nginx 配置：
+
+| 内容 | 现有路径 |
+| --- | --- |
+| Git 仓库 | `/home/ubuntu/MikanQuiz` |
+| 后端与虚拟环境 | `/home/ubuntu/mikanquiz/src/web/backend`、其下 `.venv` |
+| Nginx 静态文件 | `/home/ubuntu/mikanquiz/frontend` |
+| R2 适配器 | `/home/ubuntu/mikanquiz/src/web/r2-uploader` |
+| API 服务与环境文件 | `quiz-api.service`、`/etc/quiz/quiz-api.env` |
+| 数据库与公共媒体域名 | `/srv/quiz/data/quiz.db`、`https://pan.mikanquiz.xyz` |
+
+使用 `ubuntu` 操作员运行，保留旧脚本的 `ubuntu:root` 迁移身份，并需要非交互 sudo。先确认实际 Nginx `root` 和服务路径仍与表格一致。脚本检查生产配置、数据库权限及工作区，拉取代码后暂停 API 和已启用的相关定时器，执行数据库备份，同步后端/R2 适配器/维护脚本，按需安装依赖，读取生产环境配置执行 Alembic，再同步仓库已有 `dist/`、启动 API 并校验健康响应。
+
+脚本会产生维护中断。失败时不会自动回退数据库，也不会自动恢复已暂停的定时器；原定时器列表保存在生产目录 `.deploy-paused-timers`，修复后重跑会继续恢复。已安装的其他自定义写入任务应由部署者另外暂停。服务重启后字体缓存可能需要重新预热。
+
+把脚本保存在仓库外（避免自己保存的脚本触发工作区脏检查），例如 `/home/ubuntu/update-mikanquiz.sh`，然后执行：
+
+```sh
+bash /home/ubuntu/update-mikanquiz.sh
+```
+
+不再在服务器执行前端 `npm ci` 或 `npm run build`，因此不会因缺失 `.env.local` 而把现有招募信息构建为空，也不会升级 pip。若仓库原来因服务器构建留下改动，先运行 `git status --short`、`git diff --stat` 检查并保留所需改动；脚本不会强制清理。Nginx 的 `blob:` 和上传限制需单独合并到实际站点配置，脚本仅检查并 reload 现有配置。
+
 ## 1. 目录与前提
 
 需要 Python 3.10+、Node.js 22.18+、npm、Git、Nginx 和 systemd。前端使用仓库中的 `dist/` 时无需在服务器构建；R2 适配器仍需要 Node.js。部署前检查 `python3 --version`、`node --version`，不要假定系统软件源一定提供所需 Node.js 版本。
