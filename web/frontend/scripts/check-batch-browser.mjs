@@ -134,7 +134,11 @@ try {
   await page.locator('.canvas-viewport svg').waitFor();
   await waitSaved();
   assert.equal(await page.getByRole('button', { name: '移动', exact: true }).getAttribute('aria-pressed'), 'true', 'New browser sessions should enter image mode with pan selected');
-  assert.equal(await page.evaluate(() => localStorage.getItem('mikanquiz-batch-crop-mode')), 'draw', 'The selected canvas mode should be remembered');
+  assert.equal(await page.evaluate(() => localStorage.getItem('mikanquiz-batch-crop-mode')), null, 'A new session should not have a saved mode');
+  await page.getByRole('button', { name: '框选', exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem('mikanquiz-batch-crop-mode')), 'draw', 'An explicitly selected canvas mode should be remembered');
+  await page.getByRole('button', { name: '移动', exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem('mikanquiz-batch-crop-mode')), 'pan', 'Switching back to pan should update the remembered mode');
   const canvasHeight = await page.locator('.canvas-viewport').evaluate(element => element.clientHeight);
   assert.ok(canvasHeight >= 650, `Tall manga canvas should reserve vertical space (got ${canvasHeight}px)`);
   assert.equal(await page.locator('.page-actions').count(), 0, 'The left page action bar should be removed');
@@ -161,7 +165,7 @@ try {
   await page.keyboard.press('ArrowRight');
   await waitSaved();
   assert.equal((await stored()).pages[0].regions[0].status, 'draft');
-  assert.equal((await stored()).pages[0].regions[0].x, 71);
+  assert.equal((await stored()).pages[0].regions[0].x, first.x + 1);
   await resizeSelected(20, 30); // drag southeast resize handle
   await waitSaved();
   assert.equal((await stored()).pages[0].regions[0].width, 520);

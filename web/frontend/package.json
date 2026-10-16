@@ -1,7 +1,7 @@
 {
   "name": "hanzipen-web",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "test:api-contract": "node scripts/check-api-contract.mjs",
     "test:batch-core": "node scripts/check-batch-core.mjs",
-    "test:batch-browser": "node scripts/check-batch-browser.mjs",
-    "test:batch-real": "node scripts/check-batch-real.mjs"
+    "test:batch-browser": "node scripts/check-batch-browser.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -21,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@vitejs/plugin-vue": "^5.2.1",
+    "playwright": "^1.64.1",
     "typescript": "~5.6.3",
     "vite": "^6.0.5",
     "vue-tsc": "^2.2.0"

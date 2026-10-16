@@ -30,7 +30,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         access_log_max_bytes=settings.access_log_max_bytes,
         access_log_backup_count=settings.access_log_backup_count,
     )
-    app = FastAPI(title="砂糖字形课堂 API", version="1.0.5", docs_url="/api/docs")
+    app = FastAPI(title="砂糖字形课堂 API", version="1.0.6", docs_url="/api/docs")
     app.state.database = Database(settings.database_url)
     app.state.settings = settings
     app.state.feedback_rate_limiter = FeedbackRateLimiter(settings.feedback_rate_limit_per_hour)

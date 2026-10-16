@@ -4,18 +4,15 @@
 
 MikanQuiz: Chinese character/font quiz system with a Vue 3 Web frontend and FastAPI backend.
 
-## Miniprogram (Deprecated)
+## Legacy Miniprogram (Unmaintained)
 
-The `miniprogram/` and `cloudfunctions/quiz/` directories contain the original WeChat miniprogram client. **It is no longer maintained.** New features, bug fixes, and UI work should only target the Web frontend (`web/`). Do not add miniprogram compatibility when building new functionality.
-The frozen client retains only the pages registered in `miniprogram/app.json`; unregistered legacy `chatBot`/`foodBuy` pages and their support components have been removed. Recover them from history only when explicitly investigating the old client.
+The original `miniprogram/`, `cloudfunctions/quiz/`, and root `project.config.json` remain as historical code and configuration. They are unmaintained and are not part of the Web build or deployment. Unused cross-platform scaffolding and old cloud-export migration tooling have been removed. New features and fixes target `web/`; do not add miniprogram compatibility unless explicitly requested. See `miniprogram/README.md` and `cloudfunctions/quiz/README.md`. The backend's historical Bearer login API remains for existing integrations and tests.
 
 ## Directory Structure
 
 - `web/frontend/` — Vue 3 + Vite Web frontend (TypeScript)
 - `web/backend/` — FastAPI + SQLite backend (Python)
 - `web/r2-uploader/` — Cloudflare R2 image upload adapter (Node.js)
-- `miniprogram/` — ~~WeChat miniprogram~~ (deprecated, frozen)
-- `cloudfunctions/quiz/` — ~~WeChat cloud functions~~ (deprecated, frozen)
 
 ## Development Commands
 

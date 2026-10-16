@@ -2,7 +2,8 @@
 import { useRouter } from 'vue-router';
 import BrandHeader from '@/components/BrandHeader.vue';
 import mascotArtwork from '@/assets/mascot-study-with-bg.png';
-import heroTitle from '../../../../miniprogram/images/hero-title-hanzipen.png';
+import heroTitle from '@/assets/hero-title-hanzipen.png';
+import { site } from '@/config/site';
 
 const router = useRouter();
 function beginQuiz(): void {
@@ -38,13 +39,13 @@ function beginQuiz(): void {
               <span><strong>嵌字小本本</strong><small>一点点点点也许嵌字会用上的教程</small></span>
               <span aria-hidden="true">→</span>
             </RouterLink>
-            <aside class="recruit" aria-label="汉化工房九九组招募">
+            <aside v-if="site.groupName" class="recruit" :aria-label="`${site.groupName}招募`">
               <p class="recruit-intro">
-                <strong>汉化工房九九组</strong><span> · </span>我们是(主打)萌系轻百合的汉化组
+                <strong>{{ site.groupName }}</strong><template v-if="site.groupDescription"><span> · </span>{{ site.groupDescription }}</template>
               </p>
               <p class="recruit-groups">
-                <span>加入我们：826788824</span>
-                <span>一起闲聊：470375645</span>
+                <span v-if="site.joinGroup">加入我们：{{ site.joinGroup }}</span>
+                <span v-if="site.chatGroup">一起闲聊：{{ site.chatGroup }}</span>
               </p>
             </aside>
           </div>

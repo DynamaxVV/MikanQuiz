@@ -1,11 +1,14 @@
 # 独立后端
 
-这是当前 Web 主路径使用的 FastAPI 单体服务，也为冻结的小程序兼容客户端提供 API。生产运行在单个 Uvicorn worker、SQLite 本地磁盘和宿主机 Nginx 后面；数据库结构只由 Alembic 迁移创建，应用启动**不会**调用 `create_all()`。
+这是当前 Web 主路径使用的 FastAPI 单体服务，保留历史 Bearer 登录接口供既有集成使用，旧小程序源码仅作为停止维护的历史代码保留。生产运行在单个 Uvicorn worker、SQLite 本地磁盘和宿主机 Nginx 后面；数据库结构只由 Alembic 迁移创建，应用启动**不会**调用 `create_all()`。
+
+首次上线、日常更新、备份恢复与字体预热统一见 [部署与维护手册](../deploy/README.md)。本文主要说明本地运行、环境变量与接口。
 
 ## 本地运行
 
 ```sh
 cd web/backend
+cp .env.example .env
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements-dev.txt
@@ -167,7 +170,7 @@ Web 登录只返回：
 
 同时设置 `HttpOnly; Secure; SameSite=Lax` 的 `quiz_admin_session` Cookie。Web `fetch` 必须使用同源请求和 `credentials: "include"`；前端不接触令牌原文。
 
-小程序登录返回可保存的 Bearer token：
+历史小程序登录接口返回可保存的 Bearer token（为既有集成保留，Web 不使用）：
 
 ```json
 {"token":"Bearer 令牌原文","expires_at":"2026-07-22T08:00:00+00:00","username":"operator"}
@@ -184,15 +187,23 @@ Web 登录只返回：
 | `GET` | `/api/v1/admin/questions?page=1&page_size=20&query=&difficulty=` | `{items, page, page_size, total}`，每项是完整题目 |
 | `POST` | `/api/v1/admin/questions` | 完整题目；返回 `201` 和完整题目 |
 | `GET` | `/api/v1/admin/questions/{id}` | 完整题目 |
+| `GET` | `/api/v1/admin/questions/{id}/navigation` | 当前筛选和排序范围内的相邻题目 |
 | `POST` | `/api/v1/admin/images` | multipart 表单字段 `image`；返回 `{image_url}` |
 | `PATCH` | `/api/v1/admin/questions/{id}` | 完整题目字段的任意子集；返回完整题目 |
 | `DELETE` | `/api/v1/admin/questions/{id}` | `204` |
-| `POST` | `/api/v1/admin/font-references` | 新增 `{title,image_url,note,difficulty,sort_order}` 嵌字笔记卡片 |
-| `PATCH` | `/api/v1/admin/font-references/{id}` | 部分更新卡片字段 |
-| `DELETE` | `/api/v1/admin/font-references/{id}` | `204`，删除卡片 |
+| `GET` | `/api/v1/admin/font-reference-sections` | 返回包含 cards 的全部嵌字笔记分区 |
+| `PUT` | `/api/v1/admin/font-reference-sections` | 使用 `{sections:[...]}` 整体保存分区与卡片，新增、编辑、删除均通过此接口完成 |
+| `POST` | `/api/v1/admin/fonts` | multipart 字段 `font`；支持最大 40 MiB 的 TTF、OTF、WOFF、WOFF2，返回 `{image_url}` 字体 URL |
+| `POST` | `/api/v1/admin/note-pdfs` | multipart 字段 `pdf`；最大 20 MiB，返回 `{pdf_url,pdf_name,pdf_size_bytes}` |
 | `GET` | `/api/v1/admin/settings` | 完整 settings 对象 |
 | `PUT` | `/api/v1/admin/settings/strategy` | `{"question_count":10,"modes":{...}}` |
-| `PUT` | `/api/v1/admin/settings/font-presets` | `{"font_presets":["甲","乙"]}` |
+| `GET` | `/api/v1/admin/option-groups` | 字体分区及字体目录 |
+| `PUT` | `/api/v1/admin/option-groups` | 整体更新字体目录，提交 `{groups:[...]}` |
+| `GET` | `/api/v1/admin/option-groups/export` | 导出字体目录 JSON |
+| `POST` | `/api/v1/admin/option-groups/import` | 导入字体目录，提交导出的 `{groups:[...]}` |
+| `GET` | `/api/v1/admin/font-explanation-cache/{id}` | 读取字体的共享解析草稿 |
+| `PUT` | `/api/v1/admin/font-explanation-cache/{id}` | 以 `{explanation:"..."}` 保存字体共享解析草稿 |
+| `GET` | `/api/v1/admin/statistics` | 按难度及正确字体统计题数 |
 | `GET` | `/api/v1/admin/submissions?page=1&page_size=20&display_name=&from=&to=` | `{items, page, page_size, total}` |
 | `GET` | `/api/v1/admin/submissions/{id}` | 上述完整提交结果和历史快照 |
 
@@ -219,6 +230,8 @@ Web 登录只返回：
 `GET /api/health` 是 Nginx/systemd 的健康检查，只返回 `{"status":"ok","database":"ok"}`。
 
 公开嵌字笔记卡片使用 `GET /api/v1/font-references`，无需管理员认证。
+
+字体快捷项通过 `/admin/option-groups` 管理，不存在独立的 `/admin/settings/font-presets` 写入接口。字体预览通过 `GET/HEAD /api/v1/fonts/stream?url=...&text=...` 获取同源字体资源；字体缓存预热与排查见 [部署手册](../deploy/README.md#9-字体缓存预热)。完整请求 schema 以运行实例的 `/api/docs` 为准。
 
 ### 配置迁移
 
@@ -264,13 +277,10 @@ Web 登录只返回：
 - 停用管理员会撤销其全部会话；CLI 拒绝停用最后一个有效管理员。
 - 业务表不写 IP。限流、真实 IP 转发、请求大小和 TLS 由 Nginx 管理。
 - 应用日志为 stdout 的单行 JSON，由 systemd journald 收集；日志含真实用户 IP、请求 ID、管理员审计和存储上传事件。关键 HTTP/答题/管理员认证事件会额外写入 `QUIZ_ACCESS_LOG_PATH` 指定的轮转 JSONL 文件。部署时安装 `../deploy/mikan-quiz-journald.conf.example`，并使用 `journalctl -u <实际服务名> -o cat | jq` 或 `jq` 查询该文件。完整字段和隐私边界见 [`LOGGING_DESIGN_ZH.md`](LOGGING_DESIGN_ZH.md)。
-- `../scripts/backup_sqlite.py` 用 SQLite 在线备份 API 生成快照；`../scripts/migrate_cloud_export.py` 只在完成图片 URL 映射后导入旧云导出数据。
+- `../scripts/backup_sqlite.py` 用 SQLite 在线备份 API 生成快照；恢复步骤见 [部署手册](../deploy/README.md#8-备份恢复与版本回退)。
 - `../scripts/cleanup_expired_attempts.py` 由 `quiz-cleanup.timer` 每小时清理过期且未提交的 attempt；已提交记录永不由该任务删除。
 - 管理配置变更只写入 `sync_outbox`，不在 API 请求中执行 R2 网络操作。安装 `../deploy/quiz-sync.service` 和 `quiz-sync.timer`，由 `../scripts/sync_worker.py --drain` 重建 `sync/questions/{id}.json`、`sync/questions/all.json`、`sync/notes/{section_id}.json` 和 `sync/notes/all.json`；任务按 scope 单飞、带租约/围栏、失败指数退避，终态失败可用 `--outbox-id ID` 人工重试。
 部署 Nginx 时，`../deploy/nginx.http.conf.example` 必须安装到由主配置 `http {}` 引入的位置（Ubuntu 默认可用 `/etc/nginx/conf.d/`）；`../deploy/nginx.conf.example` 才是 `sites-enabled` 的 `server {}` 文件。还要将 `nginx.proxy-headers.conf.example` 安装为 `/etc/nginx/snippets/quiz-proxy-headers.conf`。填写真实备案中转 IP/CIDR 的 `set_real_ip_from` 后，样例会覆盖任何客户端伪造的 `X-Forwarded-For`，只将可信 `$remote_addr` 转发给应用。部署前运行 `nginx -t`；本机没有 Nginx 时可先执行 `python web/deploy/verify_nginx_example.py` 做静态检查。
-
-迁移历史提交时，`answers` 中必须含完整历史快照：`questionId`、`selected`、`isCorrect`、`correctAnswer`、`questionText`、`imageUrl`（可为空）、`options`（四项）和 `explanation`；提交本身还必须含 `score`、`correctCount`、`total`、`submittedAt`。脚本只使用这些导出值写入历史，并验证它们彼此一致。旧导出若只含 `selected/isCorrect` 会安全失败，绝不使用当前题库的答案、解析、选项或图片反推历史。
-
 
 ### 嵌字笔记 PDF 附件
 
@@ -278,4 +288,4 @@ Web 登录只返回：
 
 用户通过 `GET /api/v1/font-references/{card_id}/pdf` 下载。R2 对象带 `Content-Disposition: attachment` 和原文件名；本地模式由后端限制在上传目录内读取并返回下载响应。附件信息同时包含在配置导入导出与笔记同步 JSON 中，旧配置缺少这些字段时视为无附件。
 
-更新后从 `web/backend` 执行 `.venv/bin/alembic upgrade head`，应用迁移 `20261014_0016`，再重启后端。反向代理上传上限须大于 20MB（示例 Nginx 的全局上限为 40MB）。
+更新后从 `web/backend` 执行 `.venv/bin/alembic upgrade head`，应用迁移 `20261014_0016`，再重启后端。生产虚拟环境路径按实际部署替换。反向代理上传上限须包含 multipart 开销；示例 Nginx 全局为 64 MiB，兼容最大 40 MiB 的字体上传，配置导入位置单独限制为 10 MiB。

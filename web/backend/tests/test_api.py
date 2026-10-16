@@ -40,7 +40,7 @@ def configure_two_question_quiz(client: TestClient) -> tuple[dict[str, str], lis
             headers=headers,
             json={
                 "text": f"题目 {index}",
-                "image_url": "https://pan.yurucamp.cn/image.png",
+                "image_url": "https://images.example.com/image.png",
                 "difficulty": 1,
                     "correct_option_id": option_ids[{"B": "乙", "D": "丁"}[answer]],
                 "explanation": f"旧解析 {index}",
@@ -142,7 +142,7 @@ def test_attempt_options_follow_selected_mode_not_question_difficulty(client: Te
         headers=headers,
         json={
             "text": "按答题模式展示字体",
-            "image_url": "https://pan.yurucamp.cn/image.png",
+            "image_url": "https://images.example.com/image.png",
             "difficulty": 1,
             "correct_option_id": one_star_option["id"],
             "explanation": "测试解析",

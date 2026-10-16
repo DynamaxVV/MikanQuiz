@@ -71,10 +71,9 @@
     "ignore": [],
     "include": []
   },
-  "appid": "wx05d78082f46febc8",
+  "appid": "YOUR_MINIPROGRAM_APPID",
   "libVersion": "3.8.1",
   "simulatorPluginLibVersion": {
     "wxext14566970e7e9f62": "2.27.3"
-  },
-  "projectArchitecture": "multiPlatform"
+  }
 }

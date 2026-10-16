@@ -19,8 +19,31 @@
 # Node.js build artifacts
 **/node_modules/
 **/dist/
+# This project's server deploys the checked-in Web bundle.
+!/web/frontend/dist/
+!/web/frontend/dist/**
 
 # Local databases and generated data
 **/var/
 **/*.db
 **/*.db-*
+
+# Personal developer-tool configuration (including retired clients)
+**/project.private.config.json
+/miniprogram/project.config.json
+
+# Local source material, working notes, and diagnostic exports
+/sample/
+/docs/compose/
+/学嵌字.png
+**/*.har
+**/*.log
+**/*.jsonl
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/backups/
+**/test-results/
+**/playwright-report/

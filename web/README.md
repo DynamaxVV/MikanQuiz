@@ -1,6 +1,6 @@
 # 本地运行 Web 与独立后端
 
-当前 Web 是主要开发路径。本地阶段不需要 Nginx、域名或旧云数据迁移；后端使用本地 SQLite，前端开发服务器自动将 `/api` 转发到后端。微信小程序已冻结，仅作为兼容客户端保留。
+当前 Web 是主要开发路径。本地阶段不需要 Nginx 或域名；后端使用本地 SQLite，前端开发服务器自动将 `/api` 转发到后端。旧小程序客户端与云函数保留为停止维护的历史代码，不属于 Web 运行路径。
 
 ## 一条命令启动前后端
 
@@ -14,8 +14,11 @@ npm run dev
 
 ## 首次准备
 
+从仓库根目录执行：
+
 ```sh
 cd web/backend
+cp .env.example .env
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements-dev.txt
@@ -29,11 +32,28 @@ python -m app.admin_cli add operator
 管理员命令会交互式要求设置密码。数据库文件在 `web/backend/var/quiz.db`，不包含旧云数据。
 
 ```sh
-cd web/frontend
-npm install
+cd ../frontend
+npm ci
 ```
 
 在浏览器打开 Vite 输出的本地地址（通常为 `http://localhost:5173`）。管理员入口为 `/admin/login`。
+
+## 站点配置
+
+在 `web/frontend` 执行 `cp .env.example .env.local` 后编辑：
+
+| 变量 | 用途 |
+| --- | --- |
+| `VITE_SITE_GROUP_NAME` | 首页招募名称；留空隐藏整个招募区域 |
+| `VITE_SITE_GROUP_DESCRIPTION` | 招募说明 |
+| `VITE_SITE_JOIN_GROUP` | 加入群号；留空隐藏 |
+| `VITE_SITE_CHAT_GROUP` | 闲聊群号；留空隐藏 |
+| `DEV_ALLOWED_HOSTS` | 开发服务器额外允许的域名，逗号分隔；本机访问无需设置 |
+| `DEV_API_TARGET` | 开发代理后端，默认 `http://127.0.0.1:8000` |
+
+`VITE_*` 会在构建时写入浏览器文件，不能放密钥。修改站点信息后需重新构建；`.env.local` 不提交。`VITE_DEV_API_TARGET` 保留为旧开发配置的兼容项，新配置使用 `DEV_API_TARGET`。
+
+首次环境准备完成后，在 `web/` 执行 `npm run dev`。示例后端 `.env` 使用 local 图片存储，数据库初始为空；先登录管理端配置字体与题目。生产使用 R2 时将 `QUIZ_STORAGE_BACKEND` 改为 `r2` 并填写对应配置。
 
 ## 答题与嵌字笔记
 
@@ -51,7 +71,7 @@ npm install
 
 ## 图片存储与上传
 
-后端启动时默认读取 `web/backend/.env`。生产默认使用 Cloudflare R2；本地开发可使用 `QUIZ_STORAGE_BACKEND=local`，把文件写入本地目录。先复制示例文件，再填入实际值（`.env` 已被忽略，不能提交到仓库）：
+后端启动时默认读取 `web/backend/.env`。后端未配置存储方式时默认使用 Cloudflare R2；示例 `.env` 为便于本地复现已选择 local 模式。本地开发可使用 `QUIZ_STORAGE_BACKEND=local`，把文件写入本地目录。若首次准备时还未复制示例文件，先复制，再填入实际值（`.env` 已被忽略，不能提交到仓库）：
 
 ```sh
 cd web/backend
@@ -73,4 +93,4 @@ npm --prefix web/frontend run test:batch-core
 npm --prefix web/frontend run build
 ```
 
-正式上线、Nginx、OSS 备份、备案域名与旧云数据迁移均另行执行；对应预案见 [`../docs/WEB_ARCHITECTURE_ZH.md`](../docs/WEB_ARCHITECTURE_ZH.md)。
+正式上线、Nginx、HTTPS、备份恢复及日常更新见 [部署与维护手册](deploy/README.md)。

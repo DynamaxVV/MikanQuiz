@@ -1,4 +1,4 @@
-# Production dependencies. Versions are intentionally pinned for reproducible venv deploys.
+# Production dependencies. Some versions are pinned; record installed versions for deploy reproducibility.
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 SQLAlchemy==2.0.43

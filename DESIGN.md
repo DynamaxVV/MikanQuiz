@@ -3,16 +3,15 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-09-22
+- Last refreshed: 2026-10-17
 - Primary product surfaces: PC Web 答题端、PC Web 管理端、Web 专属嵌字笔记
-- Supporting architecture: [`docs/WEB_ARCHITECTURE_ZH.md`](docs/WEB_ARCHITECTURE_ZH.md)
+- Deployment and maintenance: [`web/deploy/README.md`](web/deploy/README.md)
 - Evidence reviewed:
   - [`README.md`](README.md)
-  - [`docs/acceptance/WEB_VISUAL_BASELINES.md`](docs/acceptance/WEB_VISUAL_BASELINES.md) 及其截图基线
   - [`web/frontend/src/pages/QuizPage.vue`](web/frontend/src/pages/QuizPage.vue)、[`web/frontend/src/components/AdminShell.vue`](web/frontend/src/components/AdminShell.vue)
   - [`web/frontend/src/pages/FontReferencePage.vue`](web/frontend/src/pages/FontReferencePage.vue) 与管理员嵌字笔记页面
-  - [`miniprogram/images/hero-title-hanzipen.png`](miniprogram/images/hero-title-hanzipen.png)（仅作为冻结客户端的品牌参考）
-- Evidence limits: 本文件描述当前 PC Web 的设计合同；视觉截图是历史验收基线，不等同于生产环境验收。小程序源码只作为兼容客户端和品牌历史参考。
+  - [`web/frontend/src/assets/hero-title-hanzipen.png`](web/frontend/src/assets/hero-title-hanzipen.png)（Web 首页标题图片）
+- Evidence limits: 本文件描述当前 PC Web 的设计合同；设计约定不等同于当前环境的视觉或生产验收，截图需在本次验证时重新采集。小程序源码只作为停止维护的历史参考，不属于当前 Web 设计与验收范围。
 
 本文件是 PC Web 实现与评审的设计合同。实现中若出现与本文件冲突的设计决策，应先更新本文件，再修改界面。
 
@@ -429,5 +428,5 @@
 - 检查页按答题端样式显示题干、题图、选项和解析，支持选择已完成题目分次入库，显示待补充和逐题结果；需要调整时通过显式“编辑区域”返回框选。待确认提交的题目锁定内容，重试相同请求；已入库题目通过题库编辑入口修改。
 - 草稿和原图存入 IndexedDB，按管理员账号隔离；同批次使用浏览器锁避免多标签页覆盖。本机事务成功后才显示保存成功，失败时给出保留页面并重试的提示。
 - 原图仅在本机保存；上传裁图后复用 URL，建题通过持久提交回执防重复。删除本机批次不删除已入库题目。
-- 首版不包含自动识别、多区域拼图、遮挡、PDF/ZIP、跨设备草稿同步。真实样本已在隔离本地服务器和本地存储完成端到端验收；生产服务器、R2 和真实域名仍需单独验收。自动化回归继续使用合成图和模拟 API。
+- 首版不包含自动识别、多区域拼图、遮挡、PDF/ZIP、跨设备草稿同步。自动化回归使用合成图和模拟 API；生产服务器、R2、真实域名和实际内容仍需单独验收。
 - 操作及验收说明：`docs/BATCH_QUESTIONS_ZH.md`。

@@ -280,7 +280,7 @@ def test_legacy_font_reference_write_rejects_unassigned_cards(client: TestClient
         {
             "config_key": "unassigned-note",
             "title": "未归类笔记",
-            "image_url": "https://pan.yurucamp.cn/note.png",
+            "image_url": "https://images.example.com/note.png",
             "note": "等待归档",
             "difficulty": 1,
             "sort_order": 0,

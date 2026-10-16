@@ -61,47 +61,23 @@ npm run test:api-contract
 npm run build
 ```
 
-浏览器测试需要独立可用的 Playwright 及 Chromium（不加入产品依赖），并启动本地 Vite：
+浏览器测试使用前端开发依赖中的 Playwright。首次安装 Chromium 后启动本地 Vite，无需后端或私人样本：
 
 ```sh
+# 终端一，从仓库根目录执行
 cd web/frontend
+npm ci
+npx playwright install chromium
 npm run dev -- --host 127.0.0.1 --port 5178 --strictPort
-# 另一个终端，已有 Playwright 可直接解析时：
-npm run test:batch-browser
+
+# 终端二，从仓库根目录执行
+npm --prefix web/frontend run test:batch-browser
 ```
 
-Playwright 位于外部工具目录时用 `NODE_PATH` 指向其 `node_modules`；可用 `BATCH_BROWSER_EXECUTABLE` 指定已安装的 Chromium。`BATCH_TEST_URL` 默认 `http://127.0.0.1:5178`，截图默认写入 `/tmp/mikanquiz-batch-check`，可用 `BATCH_TEST_OUTPUT` 更改。
+Linux 如缺少浏览器系统依赖，可使用 `npx playwright install --with-deps chromium`。可用 `BATCH_BROWSER_EXECUTABLE` 指定已安装的 Chromium。`BATCH_TEST_URL` 默认 `http://127.0.0.1:5178`，截图默认写入 `/tmp/mikanquiz-batch-check`，可用 `BATCH_TEST_OUTPUT` 更改。
 
 测试拦截全部 `/api/v1` 请求，使用浏览器生成的合成图片，不接入真实服务器或 R2。覆盖导入排序、缩放坐标、裁图像素、区域微调与调整、刷新恢复、多标签页锁、分次提交、上传失败、创建成功但响应丢失、登录过期以及存储失败恢复。另以 36 页、108 个合成区域验证本地存储和账号隔离，作为快速回归基线。
 
 真实性验收边界：合成浏览器测试与后端 API 测试不替代真实内容验收；生产部署、目标域名和 R2 仍需单独验证。
 
 `npm run test:api-contract` 当前检查客户端会话、上传、答题页选项分区和左右方向键切题等稳定契约；它不替代真实浏览器交互验收。
-
-### 自动化基线验证记录（2026-09-09）
-
-- 后端完整测试：46 passed，包含新迁移、同账号并发重试、不同账号隔离、删除后重试、校验失败后的纠正提交。
-- 前端类型检查和 Vite 构建通过；构建输出放在 `/tmp/mikanquiz-batch-real-build`，保留仓库已有 `dist/` 改动。
-- 核心逻辑检查和合成图片浏览器检查通过，浏览器无未捕获脚本错误；浏览器检查确认编辑栏不渲染重复裁图，并确认检查页题目预览和选项选中样式。
-- 截图检查：1440×900 编辑与检查页、1280×800、640×400 窄屏。窄屏检查不等同于真实设备验收。
-- 自动化基线轮次没有对服务器执行部署、迁移、上传或真实内容验收；真实样本结果见下一节。
-
-### 真实样本与隔离本地服务器验收（2026-09-09）
-
-使用 `sample/051.jpeg`–`sample/066.jpeg` 和 `sample/笑容职场51 已校.txt`，通过真实登录页、真实 FastAPI、真实 Vite 代理和 `QUIZ_STORAGE_BACKEND=local` 完成端到端流程。图片、数据库和上传目录均位于临时隔离目录，没有使用生产数据库、R2 或仓库 `.env`。
-
-```sh
-cd web/frontend
-NODE_PATH=/path/to/playwright/node_modules \
-BATCH_REAL_SAMPLE=/path/to/MikanQuiz/sample \
-BATCH_REAL_UPLOADS=/tmp/mikanquiz-real/uploads \
-BATCH_REAL_OUTPUT=/tmp/mikanquiz-real/browser \
-BATCH_BROWSER_EXECUTABLE=/path/to/chromium \
-npm run test:batch-real
-```
-
-- 16 页图片按自然文件名排序；15 页有标注，1 页无标注。
-- 标注文件解析出 189 个区域；189 个区域全部完成、裁图并入库。
-- 管理端 API 返回 189 道题；临时本地静态目录包含 189 个可读取 PNG 裁图。
-- 浏览器无页面异常和请求失败；检查页截图保存在临时验收输出目录。
-- 这份样本为 16 页，未达到此前 30–50 页的页数压力目标，但已超过至少 100 个区域的区域数量目标；生产服务器/R2 尚未验收。
