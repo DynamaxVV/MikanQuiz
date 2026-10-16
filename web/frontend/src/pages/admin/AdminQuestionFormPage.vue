@@ -19,18 +19,23 @@ const groups = ref<OptionGroup[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const pendingImageFile = ref<File | null>(null);
+const pendingImagePreviewUrl = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const error = ref('');
 const { suggestion: explanationSuggestion, load: loadExplanationCache, input: saveExplanationCache, flush: flushExplanationCache } = useFontExplanationCache();
 
 const previewUrl = computed(() => {
-  if (pendingImageFile.value) return URL.createObjectURL(pendingImageFile.value);
-  return form.imageUrl;
+  return pendingImagePreviewUrl.value || form.imageUrl;
 });
 
-function resetForm(): void {
-  if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value);
+function clearLocalImage(): void {
+  if (pendingImagePreviewUrl.value) URL.revokeObjectURL(pendingImagePreviewUrl.value);
+  pendingImagePreviewUrl.value = null;
   pendingImageFile.value = null;
+}
+
+function resetForm(): void {
+  clearLocalImage();
   form.text = '请选择以下日文对应的汉字字体';
   form.imageUrl = null;
   form.difficulty = 2;
@@ -41,8 +46,9 @@ function resetForm(): void {
 }
 
 function setLocalImage(file: File): void {
-  if (previewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(previewUrl.value);
+  clearLocalImage();
   pendingImageFile.value = file;
+  pendingImagePreviewUrl.value = URL.createObjectURL(file);
 }
 
 const form = reactive<QuestionPayload>({ text: '请选择以下日文对应的汉字字体', imageUrl: null, difficulty: 2, correctOptionId: '', explanation: '' });
@@ -132,6 +138,7 @@ async function save(): Promise<void> {
     if (editing.value) await api.updateQuestion(id.value, payload);
     else await api.createQuestion(payload);
     ElMessage.success('题目已保存。');
+    clearLocalImage();
     if (editing.value) {
       await load();
     } else {
@@ -143,7 +150,7 @@ async function save(): Promise<void> {
 }
 
 onMounted(() => { void load(); document.addEventListener('paste', onPaste); });
-onBeforeUnmount(() => { document.removeEventListener('paste', onPaste); });
+onBeforeUnmount(() => { document.removeEventListener('paste', onPaste); clearLocalImage(); });
 </script>
 
 <template>
